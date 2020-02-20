@@ -41,6 +41,11 @@ LiquidCrystalFast lcd(7, 9, 8, 6,  3, 2, 5, 4);
 HBar hBar(lcd);
 BigNumbers bigNumbers(lcd);
 
+void MoveCursorLeft();
+void MoveCursorRight();
+void MoveNextRow();
+void MovePrevRow();
+
 // Setup
 void setup() {
   // Set the use ouf our output pins
@@ -132,6 +137,8 @@ void loop() {
         lcd.setCursor(lcdCol, lcdRow);
         break;
       case 72:  //cursor home (reset display position)
+        lcdCol = 0;
+        lcdRow = 0;        
         lcd.setCursor(0, 0);
         break;
       case 74:  //show underline cursor
@@ -142,12 +149,14 @@ void loop() {
         lcd.command(0b00001100);
         break;
       case 76:  //move cursor left
-        lcdCol--;
-        lcd.command(16);
+        MoveCursorLeft();
+        lcd.setCursor(lcdCol, lcdRow);
+        //lcd.command(16);
         break;
       case 77:  //move cursor right
-        lcdCol++;
-        lcd.command(20);
+        MoveCursorRight();
+        lcd.setCursor(lcdCol, lcdRow);
+        //lcd.command(20);
         break;
       case 78:  //define custom char
         temp = serial_getch();  // Character ram value
@@ -209,6 +218,8 @@ void loop() {
       case 110: //init lagre size digits
         lcd.clear();
         lcd.home();
+        lcdCol = 0;
+        lcdRow = 0;
         bigNumbers.Init();
         break;
       case 112: // Draw Pixel
@@ -236,13 +247,13 @@ void loop() {
         hBar.Col = serial_getch();
         hBar.Row = serial_getch();
         temp = serial_getch();
-        hBar.Draw(temp,serial_getch());       
+        hBar.Draw(temp, serial_getch());
         break;
       case 130: //setBacklightColour
         temp = serial_getch(); // red
         temp = serial_getch(); // green
         temp = serial_getch(); // blue
-        break;        
+        break;
       // case 145:  //defined above see case 80:
       case 152: //set brightness and save
         level = serial_getch();
@@ -260,11 +271,11 @@ void loop() {
         temp = serial_getch(); // red
         temp = serial_getch(); // green
         temp = serial_getch(); // blue
-        break;        
+        break;
       case 209: // set the size of the display if it isn't 16x2 (you only have to do this once)
         temp = serial_getch(); //number of columns
-        temp = serial_getch(); //number of rows 
-        break;               
+        temp = serial_getch(); //number of rows
+        break;
       default:
         //all other commands ignored and parameter byte discarded
         //temp = serial_getch();  //dump the command code
@@ -388,30 +399,32 @@ void loop() {
 
     switch (rxbyte)
     {
+      case 0x08:
+        //lcd.command(16);
+        //lcd.write(32);
+        //lcd.command(16);
+        MoveCursorLeft();
+        lcd.setCursor(lcdCol, lcdRow);
+        lcd.write(32);
+        MoveCursorLeft();
+        lcd.setCursor(lcdCol, lcdRow);        
+        break;
+      case 0x0A: //0x0A - Moves cursor to the beginning of the next (or previous) line
+        lcdCol = 0;
+        MoveNextRow();
+        lcd.setCursor(lcdCol, lcdRow);
+        break;
       case 0x0D: //0x0D - Moves cursor to the beginning of the current line
         lcdCol = 0;
         lcd.setCursor(lcdCol, lcdRow);
         break;
-      case 0x0A: //0x0A - Moves cursor to the beginning of the next (or previous) line
-        lcdCol = 0;
-        lcdRow++;
-
-        if (lcdRow > 3)
-          lcdRow = 0;
-        
-        lcd.setCursor(lcdCol, lcdRow);
-        break;
-      case 0x08:
-        lcd.command(16);
-        lcd.write(32);
-        lcd.command(16);
-        lcdCol--;
-        break;
       case 0x0C:
         lcd.clear();
         lcd.home();
+        lcdCol = 0;
+        lcdRow = 0;        
         break;
-      default:    
+      default:
         lcd.write(rxbyte);  //print it to lcd
         break;
     }
@@ -426,4 +439,40 @@ byte serial_getch() {
   // read the incoming byte:
   ch = Serial.read();
   return (byte)(ch & 0xff);
+}
+
+void MoveCursorLeft() {
+  lcdCol--;
+  if (lcdCol < 0)
+  {
+    lcdCol = 40;
+    MovePrevRow();
+  }
+}
+
+void MoveCursorRight() {
+  lcdCol++;
+  if (lcdCol > 40)
+  {
+    lcdCol = 0;
+    MoveNextRow();
+  }
+}
+
+void MoveNextRow()
+{
+  lcdRow++;
+  if (lcdRow > 3)
+  {
+    lcdRow = 0;
+  }
+}
+
+void MovePrevRow()
+{
+  lcdRow--;
+  if (lcdRow < 0)
+  {
+    lcdRow = 3;
+  }
 }
