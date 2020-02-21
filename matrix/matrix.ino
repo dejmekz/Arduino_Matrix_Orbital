@@ -38,13 +38,8 @@ byte serial_getch();
 
 LiquidCrystalFast lcd(7, 9, 8, 6,  3, 2, 5, 4);
 
-HBar hBar(lcd);
-BigNumbers bigNumbers(lcd);
-
-void MoveCursorLeft();
-void MoveCursorRight();
-void MoveNextRow();
-void MovePrevRow();
+HBar hBar = HBar(lcd);
+BigNumbers bigNumbers = BigNumbers(lcd);
 
 // Setup
 void setup() {
@@ -83,8 +78,8 @@ void loop() {
     {
       case 35: //Large digit
         temp = serial_getch();
-        bigNumbers.PrintBigCharOnPosition(serial_getch(), temp);
-        //BigNumbers.PrintBigChar(serial_getch(), temp);
+        //bigNumbers.PrintBigCharOnPosition(serial_getch(), temp);
+        bigNumbers.PrintBigChar(serial_getch(), temp);
         break;
       case 38: //pollKeyBuffer - send back key pressed
         Serial.write(0); //66 - up, 67 - right, 68 - left, 72 - down, 69 - center
@@ -137,8 +132,6 @@ void loop() {
         lcd.setCursor(lcdCol, lcdRow);
         break;
       case 72:  //cursor home (reset display position)
-        lcdCol = 0;
-        lcdRow = 0;        
         lcd.setCursor(0, 0);
         break;
       case 74:  //show underline cursor
@@ -149,14 +142,14 @@ void loop() {
         lcd.command(0b00001100);
         break;
       case 76:  //move cursor left
-        MoveCursorLeft();
-        lcd.setCursor(lcdCol, lcdRow);
-        //lcd.command(16);
+        //MoveCursorLeft();
+        //lcd.setCursor(lcdCol, lcdRow);
+        lcd.command(16);
         break;
       case 77:  //move cursor right
-        MoveCursorRight();
-        lcd.setCursor(lcdCol, lcdRow);
-        //lcd.command(20);
+        //MoveCursorRight();
+        //lcd.setCursor(lcdCol, lcdRow);
+        lcd.command(20);
         break;
       case 78:  //define custom char
         temp = serial_getch();  // Character ram value
@@ -400,29 +393,33 @@ void loop() {
     switch (rxbyte)
     {
       case 0x08:
-        //lcd.command(16);
-        //lcd.write(32);
-        //lcd.command(16);
-        MoveCursorLeft();
-        lcd.setCursor(lcdCol, lcdRow);
+        lcd.command(16);
         lcd.write(32);
-        MoveCursorLeft();
-        lcd.setCursor(lcdCol, lcdRow);        
+        lcd.command(16);
+        /*
+                MoveCursorLeft();
+                lcd.setCursor(lcdCol, lcdRow);
+                lcd.write(32);
+                MoveCursorLeft();
+                lcd.setCursor(lcdCol, lcdRow);
+        */
         break;
-      case 0x0A: //0x0A - Moves cursor to the beginning of the next (or previous) line
-        lcdCol = 0;
-        MoveNextRow();
-        lcd.setCursor(lcdCol, lcdRow);
-        break;
-      case 0x0D: //0x0D - Moves cursor to the beginning of the current line
-        lcdCol = 0;
-        lcd.setCursor(lcdCol, lcdRow);
-        break;
+      /*
+            case 0x0A: //0x0A - Moves cursor to the beginning of the next (or previous) line
+              lcdCol = 0;
+              MoveNextRow();
+              lcd.setCursor(lcdCol, lcdRow);
+              break;
+            case 0x0D: //0x0D - Moves cursor to the beginning of the current line
+              lcdCol = 0;
+              lcd.setCursor(lcdCol, lcdRow);
+              break;
+      */
       case 0x0C:
         lcd.clear();
         lcd.home();
         lcdCol = 0;
-        lcdRow = 0;        
+        lcdRow = 0;
         break;
       default:
         lcd.write(rxbyte);  //print it to lcd
@@ -439,40 +436,4 @@ byte serial_getch() {
   // read the incoming byte:
   ch = Serial.read();
   return (byte)(ch & 0xff);
-}
-
-void MoveCursorLeft() {
-  lcdCol--;
-  if (lcdCol < 0)
-  {
-    lcdCol = 40;
-    MovePrevRow();
-  }
-}
-
-void MoveCursorRight() {
-  lcdCol++;
-  if (lcdCol > 40)
-  {
-    lcdCol = 0;
-    MoveNextRow();
-  }
-}
-
-void MoveNextRow()
-{
-  lcdRow++;
-  if (lcdRow > 3)
-  {
-    lcdRow = 0;
-  }
-}
-
-void MovePrevRow()
-{
-  lcdRow--;
-  if (lcdRow < 0)
-  {
-    lcdRow = 3;
-  }
 }

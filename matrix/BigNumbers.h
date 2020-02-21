@@ -16,7 +16,7 @@ class BigNumbers
   private:
     LiquidCrystalFast *_lcd;
 
-    byte bigNumberChars[7][8] = {
+    uint8_t bigNumberChars[7][8] = {
       {
         B00000,
         B00000,
@@ -83,7 +83,7 @@ class BigNumbers
       }
     };
 
-    byte bigNumbersArray[10][4][3] = {
+    uint8_t bigNumbersArray[10][4][3] = {
       {
         // custom 0
         {1, 2, 3},
