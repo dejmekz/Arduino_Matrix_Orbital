@@ -6,6 +6,7 @@
 #include "BigNumbers.h"
 //#include "VerticalBarGraph.h"
 #include "HBar.h"
+#include "VBar.h"
 
 // Bit Rate - using 19200 but LCD Smartie defaults to 9600
 const int baud = 19200;
@@ -39,6 +40,7 @@ byte serial_getch();
 LiquidCrystalFast lcd(7, 9, 8, 6,  3, 2, 5, 4);
 
 HBar hBar = HBar(lcd);
+VBar vBar = VBar(lcd);
 BigNumbers bigNumbers = BigNumbers(lcd);
 
 // Setup
@@ -101,10 +103,9 @@ void loop() {
       case 59: //exit flow-control mode
         break;
       case 61: //Thick bargraph 5x8 char => 4 row x 8 pixels = 32 pixels
-        temp = serial_getch() - 1; //column
-        temp = serial_getch();//height in pixel = max 00..31 (1F)
+        temp = serial_getch();
+        vBar.Draw(temp, serial_getch());
         break;
-
       case 64: // EEPROM Write (address, value)
         addr = serial_getch();
         val = serial_getch();
@@ -227,7 +228,10 @@ void loop() {
         temp = serial_getch(); // y2
         break;
       case 115: //init narrow vert bar graph
+        vBar.Init(B00001100);
+        break;
       case 118: //init wide vert bar graph
+        vBar.Init(B00011111);
         break;
       case 120: //draw rect solid
         temp = serial_getch(); // colour

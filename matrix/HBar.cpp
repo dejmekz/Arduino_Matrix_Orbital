@@ -7,11 +7,11 @@ HBar::HBar(LiquidCrystalFast &lcd)
 
 void HBar::Init()
 {
-  uint8_t tmpChars[8] = {0,0,0,0,0,0,0,0};
-  
-  for (int i = 0; i < 8; i++)
+  uint8_t tmpChars[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+
+  for (byte i = 0; i < 8; i++)
   {
-    for (int x = 0; x < 8; x++)
+    for (byte x = 0; x < 8; x++)
     {
       tmpChars[x] = horizontalBarChars[i];
     }
@@ -33,6 +33,11 @@ void HBar::Draw(byte dir, byte len)
   byte hsize = len / 5;     //length of full block
   byte hrest = len % 5;     //rest - part of block - zero is space char - 1 char
   byte hfree = 20 - hsize;  //20 - hsize - rest = 19 - hsize
+
+  if ((hrest > 0) && (hfree > 0))
+  {
+    hfree--;
+  }
 
   //left to right =>
   if (dir == 0)
@@ -77,7 +82,6 @@ void HBar::DrawToRight(byte pos, byte rest, byte space)
   if (rest > 0)
   {
     _lcd->write(rest - 1);
-    space--;
   }
 
   WriteChars(32, space);
@@ -105,11 +109,6 @@ void HBar::DrawToLeft(byte pos, byte rest, byte space)
 
   _lcd->setCursor(c, r);
 
-  if (rest > 0)
-  {
-    space--;
-  }
-
   WriteChars(32, space);
 
   if (rest > 0)
@@ -124,7 +123,7 @@ void HBar::WriteChars(byte chr, byte len)
 {
   if (len == 0)
     return;
-  
+
   for (byte i = 0; i < len; i++)
   {
     _lcd->write(chr);
