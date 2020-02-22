@@ -100,9 +100,9 @@ void loop() {
         break;
       case 59: //exit flow-control mode
         break;
-      case 61: //Thick bargraph
-        temp = serial_getch();
-        temp = serial_getch();
+      case 61: //Thick bargraph 5x8 char => 4 row x 8 pixels = 32 pixels
+        temp = serial_getch() - 1; //column
+        temp = serial_getch();//height in pixel = max 00..31 (1F)
         break;
 
       case 64: // EEPROM Write (address, value)

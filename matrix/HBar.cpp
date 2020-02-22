@@ -7,9 +7,15 @@ HBar::HBar(LiquidCrystalFast &lcd)
 
 void HBar::Init()
 {
+  uint8_t tmpChars[8] = {0,0,0,0,0,0,0,0};
+  
   for (int i = 0; i < 8; i++)
   {
-    _lcd->createChar(i, horizontalBarChars[i]);
+    for (int x = 0; x < 8; x++)
+    {
+      tmpChars[x] = horizontalBarChars[i];
+    }
+    _lcd->createChar(i, tmpChars);
   }
 }
 
