@@ -4,7 +4,6 @@
 #include <LiquidCrystalFast.h>
 #include <EEPROM.h>
 #include "BigNumbers.h"
-//#include "VerticalBarGraph.h"
 #include "HBar.h"
 #include "VBar.h"
 
@@ -29,9 +28,6 @@ byte addr;
 byte level;
 int val;
 int i;
-
-byte lcdRow;
-byte lcdCol;
 
 byte data[8];  // buffer for user character data
 
@@ -114,7 +110,7 @@ void loop() {
       case 65: // EEPROM Read  (address)
         addr = serial_getch(); // EEPROM address
         val = EEPROM.read(addr); //
-        Serial.print(val);
+        Serial.write(val);
         break;
       case 66: //backlight on (at previously set brightness)
         // not implemented
@@ -128,9 +124,9 @@ void loop() {
         //analogWrite(backLight, 0);
         break;
       case 71:  //set cursor position
-        lcdCol = (serial_getch() - 1);  //get column byte
-        lcdRow = (serial_getch() - 1);  //get column byte
-        lcd.setCursor(lcdCol, lcdRow);
+        temp = (serial_getch() - 1);  //get column byte
+        val = (serial_getch() - 1);  //get column byte
+        lcd.setCursor(temp, val);
         break;
       case 72:  //cursor home (reset display position)
         lcd.setCursor(0, 0);
@@ -212,8 +208,6 @@ void loop() {
       case 110: //init lagre size digits
         lcd.clear();
         lcd.home();
-        lcdCol = 0;
-        lcdRow = 0;
         bigNumbers.Init();
         break;
       case 112: // Draw Pixel
@@ -422,8 +416,6 @@ void loop() {
       case 0x0C:
         lcd.clear();
         lcd.home();
-        lcdCol = 0;
-        lcdRow = 0;
         break;
       default:
         lcd.write(rxbyte);  //print it to lcd
