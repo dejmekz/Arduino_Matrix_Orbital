@@ -86,14 +86,14 @@ void loop() {
         EEPROM.write(SERIAL_HI, serial_getch());
         EEPROM.write(SERIAL_LO, serial_getch());
         break;
-      case 53: //0x35 - read serial number /*USING EEPROM*/
+      case 0x35: //0x35 - read serial number /*USING EEPROM*/
         Serial.write(EEPROM.read(SERIAL_HI));
         Serial.write(EEPROM.read(SERIAL_LO));
         break;
-      case 54: //0x36 -read version number
+      case 0x36: //0x36 -read version number
         Serial.write(0x11);        //'v1.1
         break;
-      case 55: //0x37 -read module type
+      case 0x37: //read module type
         Serial.write(0x07);        //'lcd_type'='LCD4041'
         break;
       case 59: //exit flow-control mode
@@ -112,18 +112,18 @@ void loop() {
         val = EEPROM.read(addr); //
         Serial.write(val);
         break;
-      case 66: //0x42 - backlight on (at previously set brightness)
-        // not implemented
-        //analogWrite(backLight, level);
+      case 0x42: //'B' - backlight on (at previously set brightness)
         temp = serial_getch();   // time value - not used
+        //analogWrite(backLight, level);
         break;
-      case 67: //0x43 - auto line-wrap on
+      case 0x43: //'C' - auto line-wrap on
+        break;
       case 68: //auto line-wrap off
         break;
       case 70: //backlight off
         //analogWrite(backLight, 0);
         break;
-      case 71:  //set cursor position
+      case 0x47:  //'G' - set cursor position
         temp = (serial_getch() - 1);  //get column byte
         val = (serial_getch() - 1);  //get column byte
         lcd.setCursor(temp, val);
@@ -134,7 +134,7 @@ void loop() {
       case 74:  //show underline cursor
         lcd.command(0b00001110);
         break;
-      case 75:  //0x4b - underline cursor off
+      case 0x4b:  //'K' - underline cursor off
         lcd.command(0b00001100);
         break;
       case 76:  //move cursor left
@@ -147,7 +147,7 @@ void loop() {
         //lcd.setCursor(lcdCol, lcdRow);
         lcd.command(20);
         break;
-      case 78:  //define custom char
+      case 0x4e: //'N' - define custom char
         temp = serial_getch();  // Character ram value
         for (i = 0; i < 8; i++) {
           data[i] = serial_getch();
@@ -156,19 +156,20 @@ void loop() {
         break;
       case 79: //autoTxKeysOff
         break;
-      case 80:  // Set contrast (but we save anyway)
+      case 0x50:  // Set contrast (but we save anyway)
         level = serial_getch();
         break;
       case 81: //auto scroll on
-      case 82: //0x52 - auto scroll off
+        break;
+      case 0x52: //'R' - auto scroll off
         break;
       case 83:  //show blinking block cursor
         lcd.command(0b00001111);
         break;
-      case 84:  //0x52 - block cursor off
+      case 0x54:  //'T' - block cursor off
         lcd.command(0b00001100);
         break;
-      case 86:  //0x56 - GPO OFF
+      case 0x56:  //'V' - GPO OFF
         //temp = serial_getch(); // GPIO Pin
         digitalWrite(GPIO, LOW);
         break;
@@ -176,7 +177,7 @@ void loop() {
         temp = serial_getch(); // GPIO Pin
         digitalWrite(GPIO, HIGH);
         break;
-      case 88:  //0x58 - clear display, cursor home
+      case 0x58:  //'X' - clear display, cursor home
         lcd.clear();
         break;
       case 96: //auto-repeat mode off (keypad)
