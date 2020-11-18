@@ -1,3 +1,6 @@
+#ifndef VBar_h
+#define VBar_h
+
 #include <inttypes.h>
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"    // for digitalRead, digitalWrite, pinMode, delayMicroseconds
@@ -16,3 +19,5 @@ class VBar
   private:
     LiquidCrystalFast *_lcd;
 };
+
+#endif

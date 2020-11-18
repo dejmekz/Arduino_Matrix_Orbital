@@ -1,3 +1,6 @@
+#ifndef HBar_h
+#define HBar_h
+
 #include <inttypes.h>
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"    // for digitalRead, digitalWrite, pinMode, delayMicroseconds
@@ -101,3 +104,5 @@ class HBar
     void DrawToRight(byte pos, byte rest, byte space);
     void DrawToLeft(byte pos, byte rest, byte space);
 };
+
+#endif

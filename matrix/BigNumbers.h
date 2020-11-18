@@ -1,3 +1,6 @@
+#ifndef BigNumbers_h
+#define BigNumbers_h
+
 #include <inttypes.h>
 #if defined(ARDUINO) && ARDUINO >= 100
 #include "Arduino.h"    // for digitalRead, digitalWrite, pinMode, delayMicroseconds
@@ -166,3 +169,5 @@ class BigNumbers
 
     void GenericDigitPrint(byte digit, byte column);
 };
+
+#endif
