@@ -21,17 +21,23 @@ const byte GPIO = 13;		// D13 - Built in LED on Nano V3.0
 const byte backLight = 10;	// D10 - Use PWM to change brightness
 const byte contrast = 3;    // D3  - Use PWM to change contrast  Connect 100uF between pin and GND
 
+// Display size
+const byte LCD_COLS = 40;
+const byte LCD_ROWS = 4;
+
 // Variables used in code - can probably optimise some of these out....
 byte rxbyte;
 byte temp;
-byte addr;
-byte level;
+byte brightness;    // backlight level, restored from EEPROM
+byte contrastLevel; // contrast level, restored from EEPROM
 int val;
 int i;
 
 byte data[8];  // buffer for user character data
 
 byte serial_getch();
+void serial_skip(int count);
+byte clamp1(byte value, byte limit);
 
 LiquidCrystalFast lcd(7, 9, 8, 6,  3, 2, 5, 4);
 
@@ -48,11 +54,13 @@ void setup() {
 
   // Gather default values from EEPROM (could add code here to handle default if EEPROM has never been written to)
   digitalWrite(GPIO, LOW);
+  brightness = EEPROM.read(BRIGHTNESS);
+  contrastLevel = EEPROM.read(CONTRAST);
   //analogWrite(backLight, EEPROM.read(BRIGHTNESS));    //  Read brightness level out of EEPROM
   //analogWrite(contrast, EEPROM.read(CONTRAST));       // Read contrast level out of EEPROM
 
   // set up the LCD's number of columns and rows:
-  lcd.begin(40, 4);
+  lcd.begin(LCD_COLS, LCD_ROWS);
   lcd.clear();
 
   lcd.print(" Matrix Orbital Display - version 1.0 ");
@@ -76,15 +84,18 @@ void loop() {
     {
       case 35: //Large digit
         temp = serial_getch();
-        //bigNumbers.PrintBigCharOnPosition(serial_getch(), temp);
-        bigNumbers.PrintBigChar(serial_getch(), temp);
+        val = serial_getch();
+        //bigNumbers.PrintBigCharOnPosition(val, temp);
+        if (temp <= LCD_COLS - 3) {  // digit is 3 columns wide
+          bigNumbers.PrintBigChar(val, temp);
+        }
         break;
       case 38: //pollKeyBuffer - send back key pressed
         Serial.write(0); //66 - up, 67 - right, 68 - left, 72 - down, 69 - center
         break;
       case 52: //set serial number /*USING EEPROM*/
-        EEPROM.write(SERIAL_HI, serial_getch());
-        EEPROM.write(SERIAL_LO, serial_getch());
+        EEPROM.update(SERIAL_HI, serial_getch());
+        EEPROM.update(SERIAL_LO, serial_getch());
         break;
       case 0x35: //0x35 - read serial number /*USING EEPROM*/
         Serial.write(EEPROM.read(SERIAL_HI));
@@ -99,22 +110,20 @@ void loop() {
       case 59: //exit flow-control mode
         break;
       case 61: //Thick bargraph 5x8 char => 4 row x 8 pixels = 32 pixels
-        temp = serial_getch();
-        vBar.Draw(temp, serial_getch());
+        temp = serial_getch();  //column, 1-based
+        vBar.Draw(clamp1(temp, LCD_COLS), serial_getch());
         break;
-      case 64: // EEPROM Write (address, value)
-        addr = serial_getch();
-        val = serial_getch();
-        EEPROM.write(addr, val);
+      case 0x3A: //enter flow-control mode (full, empty)
+        serial_skip(2);
         break;
-      case 65: // EEPROM Read  (address)
-        addr = serial_getch(); // EEPROM address
-        val = EEPROM.read(addr); //
-        Serial.write(val);
+      case 0x40: //set startup screen - one char per display cell, not supported yet
+        serial_skip(LCD_COLS * LCD_ROWS);
+        break;
+      case 0x41: //auto transmit key presses on
         break;
       case 0x42: //'B' - backlight on (at previously set brightness)
         temp = serial_getch();   // time value - not used
-        //analogWrite(backLight, level);
+        //analogWrite(backLight, brightness);
         break;
       case 0x43: //'C' - auto line-wrap on
         break;
@@ -124,9 +133,9 @@ void loop() {
         //analogWrite(backLight, 0);
         break;
       case 0x47:  //'G' - set cursor position
-        temp = (serial_getch() - 1);  //get column byte
-        val = (serial_getch() - 1);  //get column byte
-        lcd.setCursor(temp, val);
+        temp = serial_getch();  //column, 1-based
+        val = serial_getch();   //row, 1-based
+        lcd.setCursor(clamp1(temp, LCD_COLS), clamp1(val, LCD_ROWS));
         break;
       case 72:  //cursor home (reset display position)
         lcd.setCursor(0, 0);
@@ -156,8 +165,9 @@ void loop() {
         break;
       case 79: //autoTxKeysOff
         break;
-      case 0x50:  // Set contrast (but we save anyway)
-        level = serial_getch();
+      case 0x50:  // Set contrast (not saved)
+        contrastLevel = serial_getch();
+        //analogWrite(contrast, contrastLevel);
         break;
       case 81: //auto scroll on
         break;
@@ -170,7 +180,7 @@ void loop() {
         lcd.command(0b00001100);
         break;
       case 0x56:  //'V' - GPO OFF
-        //temp = serial_getch(); // GPIO Pin
+        temp = serial_getch(); // GPIO Pin
         digitalWrite(GPIO, LOW);
         break;
       case 87:  //GPO ON
@@ -204,6 +214,9 @@ void loop() {
         temp = serial_getch(); // y2
         break;
       case 109: //init med size digits
+        break;
+      case 0x6F: //place medium digit (col, row, digit) - not supported
+        serial_skip(3);
         break;
       case 110: //init lagre size digits
         lcd.clear();
@@ -246,18 +259,18 @@ void loop() {
         temp = serial_getch(); // blue
         break;
       case 145: // Set Contrast and save
-        level = 255 - serial_getch(); // Contrast value
-        //analogWrite(contrast, level);
-        EEPROM.write(CONTRAST, level);
+        contrastLevel = 255 - serial_getch(); // Contrast value
+        //analogWrite(contrast, contrastLevel);
+        EEPROM.update(CONTRAST, contrastLevel);
         break;
       case 152: //set brightness and save
-        level = serial_getch();
-        //analogWrite(backLight, level);
-        EEPROM.write(BRIGHTNESS, level);
+        brightness = serial_getch();
+        //analogWrite(backLight, brightness);
+        EEPROM.update(BRIGHTNESS, brightness);
         break;
       case 153: //set backlight brightness
-        level = serial_getch();
-        //analogWrite(backLight, level);
+        brightness = serial_getch();
+        //analogWrite(backLight, brightness);
         break;
       case 160: //Report mode - Transmission protocol select
         temp = serial_getch(); // 0 - i2c, 1 - serial
@@ -301,7 +314,7 @@ void loop() {
       case 0xA3: //sterling (pounds)
         rxbyte = 0xED;
         break;
-      case 0xAC: //sterling (pounds)
+      case 0xAC: //not sign
         rxbyte = 0xB0;
         break;
       case 0xB0: //degrees symbol
@@ -331,7 +344,7 @@ void loop() {
         rxbyte = 0x49;
         break;
       case 0xD1: //"N" tilde -> plain "N"
-        rxbyte = 0x43;
+        rxbyte = 0x4E;
         break;
       case 0xD2: //"O" variants
       case 0xD3:
@@ -372,7 +385,7 @@ void loop() {
       case 0xEF:
         rxbyte = 0x69;
         break;
-      case 0xDF: //beta  // LCDSmartie degree symbol??
+      case 0xDF: //sharp s  // LCDSmartie degree symbol??
       case 0xF2: //"o" variants except umlaut
       case 0xF3:
       case 0xF4:
@@ -436,4 +449,18 @@ byte serial_getch() {
   // read the incoming byte:
   ch = Serial.read();
   return (byte)(ch & 0xff);
+}
+
+// Read and discard parameter bytes of a command we do not implement
+void serial_skip(int count) {
+  while (count-- > 0) {
+    serial_getch();
+  }
+}
+
+// Convert a 1-based Matrix Orbital coordinate to a 0-based one inside 0..limit-1
+byte clamp1(byte value, byte limit) {
+  if (value < 1) return 0;
+  if (value > limit) return limit - 1;
+  return value - 1;
 }

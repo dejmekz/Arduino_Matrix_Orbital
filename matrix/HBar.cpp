@@ -24,9 +24,6 @@ void HBar::Draw(byte dir, byte len)
   //Bargraph max size is 20 chars
   //len range is 0 to 100
 
-  if (len < 0)
-    len = 0;
-
   if (len > 100)
     len = 100;
 
@@ -102,9 +99,9 @@ void HBar::DrawToLeft(byte pos, byte rest, byte space)
   if (r > 3)
     r = 3;
 
-  if (c > 39)
+  if (c > 20)
   {
-    c = 39;
+    c = 20;
   }
 
   _lcd->setCursor(c, r);

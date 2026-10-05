@@ -26,14 +26,10 @@ void VBar::Init(byte chr)
   }
 }
 
+// col is 0-based, len is bar height in pixels (0 - 32)
 void VBar::Draw(byte col, byte len)
 {
-  uint8_t Y = 0;
-
-  if (col > 0)
-    Y = col - 1;
-
-  len++;
+  uint8_t Y = col;
 
   if (len > 32)
     len = 32;
@@ -53,10 +49,10 @@ void VBar::Draw(byte col, byte len)
     }
   }
 
-  if (hrest > 1)
+  if (hrest > 0)
   {
     _lcd->setCursor(Y, x);
-    _lcd->write(hrest - 2);
+    _lcd->write(hrest - 1);
     x--;
     hfree--;
   }
