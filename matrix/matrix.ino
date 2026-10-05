@@ -1,14 +1,14 @@
-// Arduino MINI ATmega168
+// Matrix Orbital LCD4041 emulation on a 40x4 HD44780 display
+// Arduino Nano V3.0 (ATmega328P) or Arduino Mini (ATmega168)
 
-// include the library code:
-#include "MatrixLcd.h"
 #include <EEPROM.h>
+#include "MatrixLcd.h"
 #include "BigNumbers.h"
 #include "HBar.h"
 #include "VBar.h"
 
 // Bit Rate - using 19200 but LCD Smartie defaults to 9600
-const int baud = 19200;
+const long baud = 19200;
 
 // EEPROM address values
 const byte BRIGHTNESS = 0;	// Brightness
@@ -25,25 +25,100 @@ const byte contrast = 3;    // D3  - Use PWM to change contrast  Connect 100uF b
 const byte LCD_COLS = 40;
 const byte LCD_ROWS = 4;
 
-// Variables used in code - can probably optimise some of these out....
-byte rxbyte;
-byte temp;
+// Matrix Orbital uses 0xFE prefix for commands
+const byte COMMAND_PREFIX = 0xFE;
+
+// Matrix Orbital commands that are implemented (sent after COMMAND_PREFIX)
+enum MatrixCommand : byte {
+  CMD_LARGE_DIGIT       = 0x23,  // column, digit
+  CMD_POLL_KEYPAD       = 0x26,
+  CMD_SET_SERIAL        = 0x34,  // hi, lo
+  CMD_READ_SERIAL       = 0x35,
+  CMD_READ_VERSION      = 0x36,
+  CMD_READ_MODULE_TYPE  = 0x37,
+  CMD_VBAR              = 0x3D,  // column, height
+  CMD_STARTUP_SCREEN    = 0x40,  // one char per display cell
+  CMD_BACKLIGHT_ON      = 0x42,  // minutes
+  CMD_BACKLIGHT_OFF     = 0x46,
+  CMD_GOTO              = 0x47,  // column, row
+  CMD_HOME              = 0x48,
+  CMD_UNDERLINE_ON      = 0x4A,
+  CMD_UNDERLINE_OFF     = 0x4B,
+  CMD_CURSOR_LEFT       = 0x4C,
+  CMD_CURSOR_RIGHT      = 0x4D,
+  CMD_CUSTOM_CHAR       = 0x4E,  // slot, 8 bytes of bitmap
+  CMD_CONTRAST          = 0x50,  // level
+  CMD_BLOCK_ON          = 0x53,
+  CMD_BLOCK_OFF         = 0x54,
+  CMD_GPO_OFF           = 0x56,  // gpo number
+  CMD_GPO_ON            = 0x57,  // gpo number
+  CMD_CLEAR             = 0x58,
+  CMD_INIT_HBAR         = 0x68,
+  CMD_INIT_LARGE_DIGITS = 0x6E,
+  CMD_INIT_VBAR_NARROW  = 0x73,
+  CMD_INIT_VBAR_WIDE    = 0x76,
+  CMD_HBAR              = 0x7C,  // column, row, direction, length
+  CMD_CONTRAST_SAVE     = 0x91,  // level
+  CMD_BRIGHTNESS_SAVE   = 0x98,  // level
+  CMD_BRIGHTNESS        = 0x99,  // level
+};
+
+// Commands that are accepted but ignored, with the number of parameter bytes
+// to discard. Commands not listed here and not implemented have no parameters
+// (wrap, scroll, key and flow-control switches, medium digit init, ...).
+const byte IGNORED_COMMANDS[][2] PROGMEM = {
+  {0x3A, 2},  // enter flow-control mode: full, empty
+  {0x62, 3},  // draw bitmap: refid, x, y
+  {0x63, 1},  // set drawing color
+  {0x65, 2},  // continue line: x, y
+  {0x6C, 4},  // draw line: x1, y1, x2, y2
+  {0x6F, 3},  // place medium digit: column, row, digit
+  {0x70, 2},  // draw pixel: x, y
+  {0x72, 5},  // draw rectangle: color, x1, y1, x2, y2
+  {0x78, 5},  // draw solid rectangle: color, x1, y1, x2, y2
+  {0x82, 3},  // set backlight colour: red, green, blue
+  {0xA0, 1},  // transmission protocol select: 0 - i2c, 1 - serial
+  {0xD0, 3},  // set backlight colour: red, green, blue
+  {0xD1, 2},  // set display size: columns, rows
+};
+
+// Host characters 0x80 - 0xFF (ISO 8859-1) mapped to the HD44780 A00 ROM:
+// direct equivalents where the ROM has them, otherwise the plain letter
+const byte CHAR_MAP[128] PROGMEM = {
+  0x80, 0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87,  // 0x80
+  0x88, 0x89, 0x8A, 0x8B, 0x8C, 0x8D, 0x8E, 0x8F,  // 0x88
+  0x90, 0x91, 0x92, 0x93, 0x94, 0x95, 0x96, 0x97,  // 0x90
+  0x98, 0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F,  // 0x98
+  0xA0, 0xA1, 0xA2, 0xED, 0xA4, 0xA5, 0xA6, 0xA7,  // 0xA0  pound
+  0xA8, 0xA9, 0xAA, 0xAB, 0xB0, 0xAD, 0xAE, 0xAF,  // 0xA8  not sign
+  0xDF, 0xB1, 0xB2, 0xB3, 0xB4, 0xE4, 0xB6, 0xB7,  // 0xB0  degree, mu
+  0xB8, 0xB9, 0xBA, 0xBB, 0xBC, 0xBD, 0xBE, 0xBF,  // 0xB8
+  0x41, 0x41, 0x41, 0x41, 0x41, 0x41, 0xC6, 0xC7,  // 0xC0  A variants
+  0x45, 0x45, 0x45, 0x45, 0x49, 0x49, 0x49, 0x49,  // 0xC8  E, I variants
+  0xD0, 0x4E, 0x4F, 0x4F, 0x4F, 0x4F, 0x4F, 0xD7,  // 0xD0  N tilde, O variants
+  0x4F, 0x55, 0x55, 0x55, 0x55, 0x59, 0xDE, 0x6F,  // 0xD8  U variants, Y acute, sharp s (LCD Smartie degree?)
+  0x61, 0x61, 0x61, 0x61, 0xE1, 0x61, 0xE6, 0x63,  // 0xE0  a variants, a umlaut, c cedilla
+  0x65, 0x65, 0x65, 0x65, 0x69, 0x69, 0x69, 0x69,  // 0xE8  e, i variants
+  0xF0, 0xEE, 0x6F, 0x6F, 0x6F, 0x6F, 0xEF, 0xFD,  // 0xF0  n tilde, o variants, o umlaut, division
+  0x6F, 0x75, 0x75, 0x75, 0xF5, 0xFD, 0xFE, 0xFF,  // 0xF8  u variants, u umlaut
+};
+
 byte brightness;    // backlight level, restored from EEPROM
 byte contrastLevel; // contrast level, restored from EEPROM
-int val;
-int i;
-
-byte data[8];  // buffer for user character data
-
-byte serial_getch();
-void serial_skip(int count);
-byte clamp1(byte value, byte limit);
 
 MatrixLcd lcd(7, 9, 8, 6,  3, 2, 5, 4);
 
 HBar hBar = HBar(lcd);
 VBar vBar = VBar(lcd);
 BigNumbers bigNumbers = BigNumbers(lcd);
+
+bool firstByte = true;  // splash screen is shown until the first byte arrives
+
+byte serial_getch();
+void serial_skip(int count);
+byte clamp1(byte value, byte limit);
+void handleCommand(byte command);
+void handleChar(byte value);
 
 // Setup
 void setup() {
@@ -56,370 +131,198 @@ void setup() {
   digitalWrite(GPIO, LOW);
   brightness = EEPROM.read(BRIGHTNESS);
   contrastLevel = EEPROM.read(CONTRAST);
-  //analogWrite(backLight, EEPROM.read(BRIGHTNESS));    //  Read brightness level out of EEPROM
-  //analogWrite(contrast, EEPROM.read(CONTRAST));       // Read contrast level out of EEPROM
+  //analogWrite(backLight, brightness);
+  //analogWrite(contrast, contrastLevel);
 
   // set up the LCD's number of columns and rows:
   lcd.begin(LCD_COLS, LCD_ROWS);
-  lcd.clear();
+  lcd.clearScreen();
 
-  lcd.print(" Matrix Orbital Display - version 1.0 ");
+  lcd.print(F(" Matrix Orbital Display - version 1.0 "));
   lcd.setCursor(8, 2);
-
-  lcd.print("Input Ready");
+  lcd.print(F("Input Ready"));
   lcd.setCursor(8, 3);
-  lcd.print("19200,8,N,1");
-  Serial.begin(baud);
-  // Wait until we receive some data - note we want to hold what data it is as we use it the first iteration
-  rxbyte = serial_getch();
+  lcd.print(baud);
+  lcd.print(F(",8,N,1"));
 
-  lcd.clear();
+  Serial.begin(baud);
 }
 
-// Main loop - note we come into it with rxbyte already set from exit of Setup() function
 void loop() {
-  if (rxbyte == 254) //Matrix Orbital uses 254 prefix for commands
-  {
-    switch (serial_getch())
-    {
-      case 35: //Large digit
-        temp = serial_getch();
-        val = serial_getch();
-        //bigNumbers.PrintBigCharOnPosition(val, temp);
-        if (temp <= LCD_COLS - 3) {  // digit is 3 columns wide
-          bigNumbers.PrintBigChar(val, temp);
-        }
-        break;
-      case 38: //pollKeyBuffer - send back key pressed
-        Serial.write(0); //66 - up, 67 - right, 68 - left, 72 - down, 69 - center
-        break;
-      case 52: //set serial number /*USING EEPROM*/
-        EEPROM.update(SERIAL_HI, serial_getch());
-        EEPROM.update(SERIAL_LO, serial_getch());
-        break;
-      case 0x35: //0x35 - read serial number /*USING EEPROM*/
-        Serial.write(EEPROM.read(SERIAL_HI));
-        Serial.write(EEPROM.read(SERIAL_LO));
-        break;
-      case 0x36: //0x36 -read version number
-        Serial.write(0x11);        //'v1.1
-        break;
-      case 0x37: //read module type
-        Serial.write(0x07);        //'lcd_type'='LCD4041'
-        break;
-      case 59: //exit flow-control mode
-        break;
-      case 61: //Thick bargraph 5x8 char => 4 row x 8 pixels = 32 pixels
-        temp = serial_getch();  //column, 1-based
-        vBar.Draw(clamp1(temp, LCD_COLS), serial_getch());
-        break;
-      case 0x3A: //enter flow-control mode (full, empty)
-        serial_skip(2);
-        break;
-      case 0x40: //set startup screen - one char per display cell, not supported yet
-        serial_skip(LCD_COLS * LCD_ROWS);
-        break;
-      case 0x41: //auto transmit key presses on
-        break;
-      case 0x42: //'B' - backlight on (at previously set brightness)
-        temp = serial_getch();   // time value - not used
-        //analogWrite(backLight, brightness);
-        break;
-      case 0x43: //'C' - auto line-wrap on
-        break;
-      case 68: //auto line-wrap off
-        break;
-      case 70: //backlight off
-        //analogWrite(backLight, 0);
-        break;
-      case 0x47:  //'G' - set cursor position
-        temp = serial_getch();  //column, 1-based
-        val = serial_getch();   //row, 1-based
-        lcd.moveTo(clamp1(temp, LCD_COLS), clamp1(val, LCD_ROWS));
-        break;
-      case 72:  //cursor home (reset display position)
-        lcd.moveTo(0, 0);
-        break;
-      case 74:  //show underline cursor
-        lcd.setCursorMode(lcd.cursorMode() | LCD_CURSORON);
-        break;
-      case 0x4b:  //'K' - underline cursor off
-        lcd.setCursorMode(lcd.cursorMode() & ~LCD_CURSORON);
-        break;
-      case 76:  //move cursor left
-        lcd.cursorLeft();
-        break;
-      case 77:  //move cursor right
-        lcd.cursorRight();
-        break;
-      case 0x4e: //'N' - define custom char
-        temp = serial_getch();  // Character ram value
-        for (i = 0; i < 8; i++) {
-          data[i] = serial_getch();
-        }
-        lcd.createChar(temp, data);
-        break;
-      case 79: //autoTxKeysOff
-        break;
-      case 0x50:  // Set contrast (not saved)
-        contrastLevel = serial_getch();
-        //analogWrite(contrast, contrastLevel);
-        break;
-      case 81: //auto scroll on
-        break;
-      case 0x52: //'R' - auto scroll off
-        break;
-      case 83:  //show blinking block cursor
-        lcd.setCursorMode(lcd.cursorMode() | LCD_BLINKON);
-        break;
-      case 0x54:  //'T' - block cursor off
-        lcd.setCursorMode(lcd.cursorMode() & ~LCD_BLINKON);
-        break;
-      case 0x56:  //'V' - GPO OFF
-        temp = serial_getch(); // GPIO Pin
-        digitalWrite(GPIO, LOW);
-        break;
-      case 87:  //GPO ON
-        temp = serial_getch(); // GPIO Pin
-        digitalWrite(GPIO, HIGH);
-        break;
-      case 0x58:  //'X' - clear display, cursor home
-        lcd.clearScreen();
-        break;
-      case 96: //auto-repeat mode off (keypad)
-        break;
-      case 98: //Draw bitmap
-        temp = serial_getch(); // refid
-        temp = serial_getch(); // x
-        temp = serial_getch(); // y
-        break;
-      case 99: // set drawing color
-        temp = serial_getch();
-        break;
-      case 101: //Draw line continue
-        temp = serial_getch(); // x
-        temp = serial_getch(); // y
-        break;
-      case 104: //init horiz bar graph
-        hBar.Init();
-        break;
-      case 108:
-        temp = serial_getch(); // x1
-        temp = serial_getch(); // y1
-        temp = serial_getch(); // x2
-        temp = serial_getch(); // y2
-        break;
-      case 109: //init med size digits
-        break;
-      case 0x6F: //place medium digit (col, row, digit) - not supported
-        serial_skip(3);
-        break;
-      case 110: //init large size digits
-        lcd.clearScreen();
-        bigNumbers.Init();
-        break;
-      case 112: // Draw Pixel
-        temp = serial_getch(); // x
-        temp = serial_getch(); // y
-        break;
-      case 114: //draw rect
-        temp = serial_getch(); // colour
-        temp = serial_getch(); // x1
-        temp = serial_getch(); // y1
-        temp = serial_getch(); // x2
-        temp = serial_getch(); // y2
-        break;
-      case 115: //init narrow vert bar graph
-        vBar.Init(B00001100);
-        break;
-      case 118: //init wide vert bar graph
-        vBar.Init(B00011111);
-        break;
-      case 120: //draw rect solid
-        temp = serial_getch(); // colour
-        temp = serial_getch(); // x1
-        temp = serial_getch(); // y1
-        temp = serial_getch(); // x2
-        temp = serial_getch(); // y2
-        break;
-      case 124: //horizontal bar graph
-        hBar.Col = serial_getch();
-        hBar.Row = serial_getch();
-        temp = serial_getch();
-        hBar.Draw(temp, serial_getch());
-        break;
-      case 130: //setBacklightColour
-        temp = serial_getch(); // red
-        temp = serial_getch(); // green
-        temp = serial_getch(); // blue
-        break;
-      case 145: // Set Contrast and save
-        contrastLevel = 255 - serial_getch(); // Contrast value
-        //analogWrite(contrast, contrastLevel);
-        EEPROM.update(CONTRAST, contrastLevel);
-        break;
-      case 152: //set brightness and save
-        brightness = serial_getch();
-        //analogWrite(backLight, brightness);
-        EEPROM.update(BRIGHTNESS, brightness);
-        break;
-      case 153: //set backlight brightness
-        brightness = serial_getch();
-        //analogWrite(backLight, brightness);
-        break;
-      case 160: //Report mode - Transmission protocol select
-        temp = serial_getch(); // 0 - i2c, 1 - serial
-        break;
-      case 208: //setBacklightColour
-        temp = serial_getch(); // red
-        temp = serial_getch(); // green
-        temp = serial_getch(); // blue
-        break;
-      case 209: // set the size of the display if it isn't 16x2 (you only have to do this once)
-        temp = serial_getch(); //number of columns
-        temp = serial_getch(); //number of rows
-        break;
-      default:
-        //all other commands ignored and parameter byte discarded
-        //temp = serial_getch();  //dump the command code
-        break;
-    }
-  } //END OF COMMAND HANDLER
-  else
-  {
-    // Not a command character but still might be a special character
-    //change accented char to plain, detect and change descenders
-    switch (rxbyte)
-    {
-      //chars that have direct equivalent in LCD charmap
-      case 0xE4: //ASCII "a" umlaut
-        rxbyte = 0xE1;
-        break;
-      case 0xF1: //ASCII "n" tilde
-        rxbyte = 0xEE;
-        break;
-      case 0xF6: //ASCII "o" umlaut
-        rxbyte = 0xEF; //was wrong in v0.86
-        break;
-      case 0xFC: //ASCII "u" umlaut
-        rxbyte = 0xF5;
-        break;
-      //accented -> plain equivalent
-      //and misc symbol translation
-      case 0xA3: //sterling (pounds)
-        rxbyte = 0xED;
-        break;
-      case 0xAC: //not sign
-        rxbyte = 0xB0;
-        break;
-      case 0xB0: //degrees symbol
-        rxbyte = 0xDF;
-        break;
-      case 0xB5: //mu
-        rxbyte = 0xE4;
-        break;
-      case 0xC0: //"A" variants
-      case 0xC1:
-      case 0xC2:
-      case 0xC3:
-      case 0xC4:
-      case 0xC5:
-        rxbyte = 0x41;
-        break;
-      case 0xC8: //"E" variants
-      case 0xC9:
-      case 0xCA:
-      case 0xCB:
-        rxbyte = 0x45;
-        break;
-      case 0xCC: //"I" variants
-      case 0xCD:
-      case 0xCE:
-      case 0xCF:
-        rxbyte = 0x49;
-        break;
-      case 0xD1: //"N" tilde -> plain "N"
-        rxbyte = 0x4E;
-        break;
-      case 0xD2: //"O" variants
-      case 0xD3:
-      case 0xD4:
-      case 0xD5:
-      case 0xD6:
-      case 0xD8:
-        rxbyte = 0x4F;
-        break;
-      case 0xD9: //"U" variants
-      case 0xDA:
-      case 0xDB:
-      case 0xDC:
-        rxbyte = 0x55;
-        break;
-      case 0xDD: //"Y" acute -> "Y"
-        rxbyte = 0x59;
-        break;
-      case 0xE0: //"a" variants except umlaut
-      case 0xE1:
-      case 0xE2:
-      case 0xE3:
-      case 0xE5:
-        rxbyte = 0x61;
-        break;
-      case 0xE7: //"c" cedilla -> "c"
-        rxbyte = 0x63;
-        break;
-      case 0xE8: //"e" variants
-      case 0xE9:
-      case 0xEA:
-      case 0xEB:
-        rxbyte = 0x65;
-        break;
-      case 0xEC: //"i" variants
-      case 0xED:
-      case 0xEE:
-      case 0xEF:
-        rxbyte = 0x69;
-        break;
-      case 0xDF: //sharp s  // LCDSmartie degree symbol??
-      case 0xF2: //"o" variants except umlaut
-      case 0xF3:
-      case 0xF4:
-      case 0xF5:
-      case 0xF8:
-        rxbyte = 0x6F;
-        break;
-      case 0xF7: //division symbol
-        rxbyte = 0xFD;
-        break;
-      case 0xF9: //"u" variants except umlaut
-      case 0xFA:
-      case 0xFB:
-        rxbyte = 0x75;
-        break;
-      default:
-        break;
-    }
+  byte rxbyte = serial_getch();
 
-    switch (rxbyte)
-    {
-      case 0x08: //backspace
-        lcd.backspace();
-        break;
-      case 0x0A: //line feed - beginning of the next line
-        lcd.lineFeed();
-        break;
-      case 0x0D: //carriage return - beginning of the current line
-        lcd.carriageReturn();
-        break;
-      case 0x0C: //form feed - clear display
-        lcd.clearScreen();
-        break;
-      default:
-        lcd.write(rxbyte);  //print it to lcd
-        break;
-    }
+  if (firstByte) {
+    lcd.clearScreen();
+    firstByte = false;
   }
-  rxbyte = serial_getch();    // Wait for the next byte and use value for next iteration
+
+  if (rxbyte == COMMAND_PREFIX)
+    handleCommand(serial_getch());
+  else
+    handleChar(rxbyte);
+}
+
+void handleCommand(byte command) {
+  byte col, row, value;
+  byte data[8];  // buffer for user character data
+
+  switch (command)
+  {
+    case CMD_LARGE_DIGIT:
+      col = serial_getch();
+      value = serial_getch();
+      //bigNumbers.PrintBigCharOnPosition(value, col);
+      if (col <= LCD_COLS - 3) {  // digit is 3 columns wide
+        bigNumbers.PrintBigChar(value, col);
+      }
+      break;
+    case CMD_POLL_KEYPAD:  //send back key pressed
+      Serial.write(0); //66 - up, 67 - right, 68 - left, 72 - down, 69 - center
+      break;
+    case CMD_SET_SERIAL:
+      EEPROM.update(SERIAL_HI, serial_getch());
+      EEPROM.update(SERIAL_LO, serial_getch());
+      break;
+    case CMD_READ_SERIAL:
+      Serial.write(EEPROM.read(SERIAL_HI));
+      Serial.write(EEPROM.read(SERIAL_LO));
+      break;
+    case CMD_READ_VERSION:
+      Serial.write(0x11);        //'v1.1
+      break;
+    case CMD_READ_MODULE_TYPE:
+      Serial.write(0x07);        //'lcd_type'='LCD4041'
+      break;
+    case CMD_VBAR: //Thick bargraph 5x8 char => 4 row x 8 pixels = 32 pixels
+      col = serial_getch();  //column, 1-based
+      vBar.Draw(clamp1(col, LCD_COLS), serial_getch());
+      break;
+    case CMD_STARTUP_SCREEN: //not supported yet
+      serial_skip(LCD_COLS * LCD_ROWS);
+      break;
+    case CMD_BACKLIGHT_ON: //at previously set brightness
+      serial_getch();   // time value - not used
+      //analogWrite(backLight, brightness);
+      break;
+    case CMD_BACKLIGHT_OFF:
+      //analogWrite(backLight, 0);
+      break;
+    case CMD_GOTO:
+      col = serial_getch();  //column, 1-based
+      row = serial_getch();  //row, 1-based
+      lcd.moveTo(clamp1(col, LCD_COLS), clamp1(row, LCD_ROWS));
+      break;
+    case CMD_HOME:
+      lcd.moveTo(0, 0);
+      break;
+    case CMD_UNDERLINE_ON:
+      lcd.setCursorMode(lcd.cursorMode() | LCD_CURSORON);
+      break;
+    case CMD_UNDERLINE_OFF:
+      lcd.setCursorMode(lcd.cursorMode() & ~LCD_CURSORON);
+      break;
+    case CMD_CURSOR_LEFT:
+      lcd.cursorLeft();
+      break;
+    case CMD_CURSOR_RIGHT:
+      lcd.cursorRight();
+      break;
+    case CMD_CUSTOM_CHAR:
+      value = serial_getch();  // Character ram value
+      for (byte i = 0; i < 8; i++) {
+        data[i] = serial_getch();
+      }
+      lcd.createChar(value, data);
+      break;
+    case CMD_CONTRAST: //not saved
+      contrastLevel = serial_getch();
+      //analogWrite(contrast, contrastLevel);
+      break;
+    case CMD_BLOCK_ON:
+      lcd.setCursorMode(lcd.cursorMode() | LCD_BLINKON);
+      break;
+    case CMD_BLOCK_OFF:
+      lcd.setCursorMode(lcd.cursorMode() & ~LCD_BLINKON);
+      break;
+    case CMD_GPO_OFF:
+      serial_getch(); // GPO number - only one GPO
+      digitalWrite(GPIO, LOW);
+      break;
+    case CMD_GPO_ON:
+      serial_getch(); // GPO number - only one GPO
+      digitalWrite(GPIO, HIGH);
+      break;
+    case CMD_CLEAR: //clear display, cursor home
+      lcd.clearScreen();
+      break;
+    case CMD_INIT_HBAR:
+      hBar.Init();
+      break;
+    case CMD_INIT_LARGE_DIGITS:
+      lcd.clearScreen();
+      bigNumbers.Init();
+      break;
+    case CMD_INIT_VBAR_NARROW:
+      vBar.Init(B00001100);
+      break;
+    case CMD_INIT_VBAR_WIDE:
+      vBar.Init(B00011111);
+      break;
+    case CMD_HBAR:
+      hBar.Col = serial_getch();
+      hBar.Row = serial_getch();
+      value = serial_getch();  // direction
+      hBar.Draw(value, serial_getch());
+      break;
+    case CMD_CONTRAST_SAVE:
+      contrastLevel = 255 - serial_getch(); // Contrast value
+      //analogWrite(contrast, contrastLevel);
+      EEPROM.update(CONTRAST, contrastLevel);
+      break;
+    case CMD_BRIGHTNESS_SAVE:
+      brightness = serial_getch();
+      //analogWrite(backLight, brightness);
+      EEPROM.update(BRIGHTNESS, brightness);
+      break;
+    case CMD_BRIGHTNESS:
+      brightness = serial_getch();
+      //analogWrite(backLight, brightness);
+      break;
+    default:
+      //all other commands ignored and their parameter bytes discarded
+      for (byte i = 0; i < sizeof(IGNORED_COMMANDS) / sizeof(IGNORED_COMMANDS[0]); i++) {
+        if (pgm_read_byte(&IGNORED_COMMANDS[i][0]) == command) {
+          serial_skip(pgm_read_byte(&IGNORED_COMMANDS[i][1]));
+          break;
+        }
+      }
+      break;
+  }
+}
+
+void handleChar(byte value) {
+  //change accented char to plain or to its LCD charmap equivalent
+  if (value >= 0x80)
+    value = pgm_read_byte(&CHAR_MAP[value - 0x80]);
+
+  switch (value)
+  {
+    case 0x08: //backspace
+      lcd.backspace();
+      break;
+    case 0x0A: //line feed - beginning of the next line
+      lcd.lineFeed();
+      break;
+    case 0x0D: //carriage return - beginning of the current line
+      lcd.carriageReturn();
+      break;
+    case 0x0C: //form feed - clear display
+      lcd.clearScreen();
+      break;
+    default:
+      lcd.write(value);  //print it to lcd
+      break;
+  }
 }
 
 // Helper function to read serial input as clean 8 bit byte
