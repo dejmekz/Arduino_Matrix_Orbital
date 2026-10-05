@@ -15,11 +15,12 @@ class HBar
     byte Col;
     byte Row;
 
-    HBar(LiquidCrystalFast &lcd);
+    HBar(LiquidCrystalFast &lcd, byte width = 20);  // width of the bar field in chars
     void Init();
     void Draw(byte dir, byte len);
   private:
     LiquidCrystalFast *_lcd;
+    byte _width;
 
     uint8_t horizontalBarChars[8] = {B10000, B11000, B11100, B11110, B00001, B00011, B00111, B01111};
 

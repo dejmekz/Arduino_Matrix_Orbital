@@ -1,7 +1,7 @@
 // Arduino MINI ATmega168
 
 // include the library code:
-#include <LiquidCrystalFast.h>
+#include "MatrixLcd.h"
 #include <EEPROM.h>
 #include "BigNumbers.h"
 #include "HBar.h"
@@ -39,7 +39,7 @@ byte serial_getch();
 void serial_skip(int count);
 byte clamp1(byte value, byte limit);
 
-LiquidCrystalFast lcd(7, 9, 8, 6,  3, 2, 5, 4);
+MatrixLcd lcd(7, 9, 8, 6,  3, 2, 5, 4);
 
 HBar hBar = HBar(lcd);
 VBar vBar = VBar(lcd);
@@ -135,26 +135,22 @@ void loop() {
       case 0x47:  //'G' - set cursor position
         temp = serial_getch();  //column, 1-based
         val = serial_getch();   //row, 1-based
-        lcd.setCursor(clamp1(temp, LCD_COLS), clamp1(val, LCD_ROWS));
+        lcd.moveTo(clamp1(temp, LCD_COLS), clamp1(val, LCD_ROWS));
         break;
       case 72:  //cursor home (reset display position)
-        lcd.setCursor(0, 0);
+        lcd.moveTo(0, 0);
         break;
       case 74:  //show underline cursor
-        lcd.command(0b00001110);
+        lcd.setCursorMode(lcd.cursorMode() | LCD_CURSORON);
         break;
       case 0x4b:  //'K' - underline cursor off
-        lcd.command(0b00001100);
+        lcd.setCursorMode(lcd.cursorMode() & ~LCD_CURSORON);
         break;
       case 76:  //move cursor left
-        //MoveCursorLeft();
-        //lcd.setCursor(lcdCol, lcdRow);
-        lcd.command(16);
+        lcd.cursorLeft();
         break;
       case 77:  //move cursor right
-        //MoveCursorRight();
-        //lcd.setCursor(lcdCol, lcdRow);
-        lcd.command(20);
+        lcd.cursorRight();
         break;
       case 0x4e: //'N' - define custom char
         temp = serial_getch();  // Character ram value
@@ -174,10 +170,10 @@ void loop() {
       case 0x52: //'R' - auto scroll off
         break;
       case 83:  //show blinking block cursor
-        lcd.command(0b00001111);
+        lcd.setCursorMode(lcd.cursorMode() | LCD_BLINKON);
         break;
       case 0x54:  //'T' - block cursor off
-        lcd.command(0b00001100);
+        lcd.setCursorMode(lcd.cursorMode() & ~LCD_BLINKON);
         break;
       case 0x56:  //'V' - GPO OFF
         temp = serial_getch(); // GPIO Pin
@@ -188,7 +184,7 @@ void loop() {
         digitalWrite(GPIO, HIGH);
         break;
       case 0x58:  //'X' - clear display, cursor home
-        lcd.clear();
+        lcd.clearScreen();
         break;
       case 96: //auto-repeat mode off (keypad)
         break;
@@ -218,9 +214,8 @@ void loop() {
       case 0x6F: //place medium digit (col, row, digit) - not supported
         serial_skip(3);
         break;
-      case 110: //init lagre size digits
-        lcd.clear();
-        lcd.home();
+      case 110: //init large size digits
+        lcd.clearScreen();
         bigNumbers.Init();
         break;
       case 112: // Draw Pixel
@@ -407,32 +402,17 @@ void loop() {
 
     switch (rxbyte)
     {
-      case 0x08:
-        lcd.command(16);
-        lcd.write(32);
-        lcd.command(16);
-        /*
-                MoveCursorLeft();
-                lcd.setCursor(lcdCol, lcdRow);
-                lcd.write(32);
-                MoveCursorLeft();
-                lcd.setCursor(lcdCol, lcdRow);
-        */
+      case 0x08: //backspace
+        lcd.backspace();
         break;
-      /*
-            case 0x0A: //0x0A - Moves cursor to the beginning of the next (or previous) line
-              lcdCol = 0;
-              MoveNextRow();
-              lcd.setCursor(lcdCol, lcdRow);
-              break;
-            case 0x0D: //0x0D - Moves cursor to the beginning of the current line
-              lcdCol = 0;
-              lcd.setCursor(lcdCol, lcdRow);
-              break;
-      */
-      case 0x0C:
-        lcd.clear();
-        lcd.home();
+      case 0x0A: //line feed - beginning of the next line
+        lcd.lineFeed();
+        break;
+      case 0x0D: //carriage return - beginning of the current line
+        lcd.carriageReturn();
+        break;
+      case 0x0C: //form feed - clear display
+        lcd.clearScreen();
         break;
       default:
         lcd.write(rxbyte);  //print it to lcd

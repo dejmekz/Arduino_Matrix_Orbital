@@ -1,8 +1,9 @@
 #include "HBar.h"
 
-HBar::HBar(LiquidCrystalFast &lcd)
+HBar::HBar(LiquidCrystalFast &lcd, byte width)
 {
   _lcd = &lcd;
+  _width = width;
 }
 
 void HBar::Init()
@@ -21,15 +22,16 @@ void HBar::Init()
 
 void HBar::Draw(byte dir, byte len)
 {
-  //Bargraph max size is 20 chars
-  //len range is 0 to 100
+  //Bargraph max size is _width chars
+  //len range is 0 to _width * 5 pixels
+  byte maxLen = _width * 5;
 
-  if (len > 100)
-    len = 100;
+  if (len > maxLen)
+    len = maxLen;
 
   byte hsize = len / 5;     //length of full block
   byte hrest = len % 5;     //rest - part of block - zero is space char - 1 char
-  byte hfree = 20 - hsize;  //20 - hsize - rest = 19 - hsize
+  byte hfree = _width - hsize;
 
   if ((hrest > 0) && (hfree > 0))
   {
@@ -67,9 +69,9 @@ void HBar::DrawToRight(byte pos, byte rest, byte space)
     c = Col - 1;
   }
 
-  if (c > 20)
+  if (c > _lcd->numcols - _width)
   {
-    c = 20;
+    c = _lcd->numcols - _width;
   }
 
   _lcd->setCursor(c, r);
@@ -90,8 +92,8 @@ void HBar::DrawToLeft(byte pos, byte rest, byte space)
   uint8_t c = 0;
   uint8_t r = 0;
 
-  if (Col > 20)
-    c = Col - 20;
+  if (Col > _width)
+    c = Col - _width;
 
   if (Row > 0)
     r = Row - 1;
@@ -99,9 +101,9 @@ void HBar::DrawToLeft(byte pos, byte rest, byte space)
   if (r > 3)
     r = 3;
 
-  if (c > 20)
+  if (c > _lcd->numcols - _width)
   {
-    c = 20;
+    c = _lcd->numcols - _width;
   }
 
   _lcd->setCursor(c, r);
