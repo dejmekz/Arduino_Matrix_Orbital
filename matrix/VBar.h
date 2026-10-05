@@ -1,12 +1,7 @@
 #ifndef VBar_h
 #define VBar_h
 
-#include <inttypes.h>
-#if defined(ARDUINO) && ARDUINO >= 100
-#include "Arduino.h"    // for digitalRead, digitalWrite, pinMode, delayMicroseconds
-#else
-#include "WProgram.h"
-#endif
+#include <Arduino.h>
 #include <LiquidCrystalFast.h>
 
 class VBar

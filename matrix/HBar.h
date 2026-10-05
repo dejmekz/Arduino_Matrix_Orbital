@@ -1,12 +1,7 @@
 #ifndef HBar_h
 #define HBar_h
 
-#include <inttypes.h>
-#if defined(ARDUINO) && ARDUINO >= 100
-#include "Arduino.h"    // for digitalRead, digitalWrite, pinMode, delayMicroseconds
-#else
-#include "WProgram.h"
-#endif
+#include <Arduino.h>
 #include <LiquidCrystalFast.h>
 
 class HBar
@@ -22,85 +17,6 @@ class HBar
     LiquidCrystalFast *_lcd;
     byte _width;
 
-    uint8_t horizontalBarChars[8] = {B10000, B11000, B11100, B11110, B00001, B00011, B00111, B01111};
-
-    /*
-        uint8_t horizontalBarChars[8][8] = {
-          {
-            B10000,
-            B10000,
-            B10000,
-            B10000,
-            B10000,
-            B10000,
-            B10000,
-            B10000
-          }, {
-            B11000,
-            B11000,
-            B11000,
-            B11000,
-            B11000,
-            B11000,
-            B11000,
-            B11000
-          }, {
-            B11100,
-            B11100,
-            B11100,
-            B11100,
-            B11100,
-            B11100,
-            B11100,
-            B11100
-          }, {
-            B11110,
-            B11110,
-            B11110,
-            B11110,
-            B11110,
-            B11110,
-            B11110,
-            B11110
-          }, {
-            B00001,
-            B00001,
-            B00001,
-            B00001,
-            B00001,
-            B00001,
-            B00001,
-            B00001
-          }, {
-            B00011,
-            B00011,
-            B00011,
-            B00011,
-            B00011,
-            B00011,
-            B00011,
-            B00011
-          }, {
-            B00111,
-            B00111,
-            B00111,
-            B00111,
-            B00111,
-            B00111,
-            B00111,
-            B00111
-          }, {
-            B01111,
-            B01111,
-            B01111,
-            B01111,
-            B01111,
-            B01111,
-            B01111,
-            B01111
-          }
-        };
-    */
     void WriteChars(byte chr, byte len);
     void DrawToRight(byte pos, byte rest, byte space);
     void DrawToLeft(byte pos, byte rest, byte space);

@@ -1,5 +1,9 @@
 #include "HBar.h"
 
+// One pixel column pattern per glyph, repeated on all 8 rows:
+// slots 0-3 fill 1-4 pixels from the left, slots 4-7 from the right
+static const uint8_t horizontalBarChars[8] PROGMEM = {B10000, B11000, B11100, B11110, B00001, B00011, B00111, B01111};
+
 HBar::HBar(LiquidCrystalFast &lcd, byte width)
 {
   _lcd = &lcd;
@@ -8,14 +12,11 @@ HBar::HBar(LiquidCrystalFast &lcd, byte width)
 
 void HBar::Init()
 {
-  uint8_t tmpChars[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+  uint8_t tmpChars[8];
 
   for (byte i = 0; i < 8; i++)
   {
-    for (byte x = 0; x < 8; x++)
-    {
-      tmpChars[x] = horizontalBarChars[i];
-    }
+    memset(tmpChars, pgm_read_byte(&horizontalBarChars[i]), sizeof(tmpChars));
     _lcd->createChar(i, tmpChars);
   }
 }
