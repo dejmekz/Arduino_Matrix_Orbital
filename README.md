@@ -34,7 +34,7 @@ PWM from D10. A series resistor on the anode (A) limits the current.
 ```
               +5V
                │
-            [R_BL]    series resistor, sized for ~0.5 A
+            [R_BL]    series resistor 4.7 Ω / 2 W
                │
              LCD A
              LCD K    LED backlight
@@ -53,10 +53,12 @@ PWM from D10. A series resistor on the anode (A) limits the current.
   below ~0.1 V.
 - **220 Ω** gate resistor limits the pin current when charging the gate;
   **10 kΩ** pull-down keeps the backlight off during reset and bootloader.
-- **R_BL**: without it the backlight of the PM4040-1 rev B module draws about
-  2.2 A at 5.2 V. Size it so the backlight draws ~0.5 A at brightness 255:
-  `R_BL = (5.2 V - V_AK) / 0.5 A`, where `V_AK` is the voltage measured across
-  LCD A-K. Use a resistor rated at least twice `R_BL x 0.25 W`.
+- **R_BL = 4.7 Ω / 2 W**: without it the backlight of the PM4040-1 rev B module
+  draws about 2.2 A at 5.2 V; with it about 0.53 A at brightness 255. The
+  resistor then dissipates `0.53² x 4.7 ≈ 1.3 W` and runs warm, so keep it
+  away from the LCD glass and give it air (a 3 W part gives more margin).
+  For another module, size it for ~0.5 A: `R_BL = (5.2 V - V_LED) / 0.5 A`,
+  with the wattage well above `R_BL x I²`.
 - **Power**: the backlight current must not flow through thin wires or the
   LCD GND pin. A voltage drop on VDD shifts the contrast (with 0.65 V of drop
   all character cells turned dark when the backlight was dimmed). Run the
