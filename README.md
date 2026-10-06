@@ -11,6 +11,25 @@ Circuit Diagram
 
 ![Circuit Diagram](http://s23.postimg.org/ijjwnjtqz/tisplay_circuit.png)
 
+Hardware
+--------
+
+| Arduino pin | Use                                                        |
+|-------------|------------------------------------------------------------|
+| D7          | LCD RS                                                     |
+| D9          | LCD R/W                                                    |
+| D8          | LCD E1 (rows 1-2)                                          |
+| D6          | LCD E2 (rows 3-4)                                          |
+| D3, D2, D5, D4 | LCD D4, D5, D6, D7                                      |
+| D10         | Backlight, PWM - drive the LED backlight via a transistor  |
+| D13         | GPO 1 (on-board LED)                                       |
+
+Contrast is set with a trimmer on the LCD V0 pin; contrast commands are ignored.
+
+Startup screen: send `0xFE 0x40` followed by 160 characters (4 rows x 40) to
+store a screen that is shown on the next power up. 160 spaces restore the
+built-in screen.
+
 Building
 --------
 

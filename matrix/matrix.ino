@@ -4,6 +4,7 @@
 #include <EEPROM.h>
 #include "MatrixLcd.h"
 #include "BigNumbers.h"
+#include "MediumNumbers.h"
 #include "HBar.h"
 #include "VBar.h"
 
@@ -57,7 +58,9 @@ enum MatrixCommand : byte {
   CMD_GPO_ON            = 0x57,  // gpo number
   CMD_CLEAR             = 0x58,
   CMD_INIT_HBAR         = 0x68,
+  CMD_INIT_MEDIUM_DIGITS = 0x6D,
   CMD_INIT_LARGE_DIGITS = 0x6E,
+  CMD_MEDIUM_DIGIT      = 0x6F,  // row, column, digit
   CMD_INIT_VBAR_NARROW  = 0x73,
   CMD_INIT_VBAR_WIDE    = 0x76,
   CMD_HBAR              = 0x7C,  // column, row, direction, length
@@ -75,7 +78,6 @@ const byte IGNORED_COMMANDS[][2] PROGMEM = {
   {0x63, 1},  // set drawing color
   {0x65, 2},  // continue line: x, y
   {0x6C, 4},  // draw line: x1, y1, x2, y2
-  {0x6F, 3},  // place medium digit: row, column, digit
   {0x70, 2},  // draw pixel: x, y
   {0x72, 5},  // draw rectangle: color, x1, y1, x2, y2
   {0x78, 5},  // draw solid rectangle: color, x1, y1, x2, y2
@@ -108,12 +110,16 @@ const byte CHAR_MAP[128] PROGMEM = {
 };
 
 byte brightness;    // backlight level, restored from EEPROM
+bool backlightOn = true;
+bool backlightTimer = false;      // backlight turns off at backlightOffAt
+unsigned long backlightOffAt;
 
 MatrixLcd lcd(7, 9, 8, 6,  3, 2, 5, 4);
 
 HBar hBar = HBar(lcd);
 VBar vBar = VBar(lcd);
 BigNumbers bigNumbers = BigNumbers(lcd);
+MediumNumbers mediumNumbers = MediumNumbers(lcd);
 
 bool firstByte = true;  // splash screen is shown until the first byte arrives
 
@@ -124,6 +130,8 @@ void handleCommand(byte command);
 void handleChar(byte value);
 byte translateChar(byte value);
 void loadSettings();
+void setBacklight(bool on);
+void checkBacklightTimer();
 void showStartupScreen();
 void saveStartupScreen();
 
@@ -131,11 +139,11 @@ void saveStartupScreen();
 void setup() {
   // Set the use ouf our output pins
   pinMode(GPIO, OUTPUT);
-  //pinMode(backLight, OUTPUT);
+  pinMode(backLight, OUTPUT);
 
   digitalWrite(GPIO, LOW);
   loadSettings();
-  //analogWrite(backLight, brightness);
+  setBacklight(true);
 
   // set up the LCD's number of columns and rows:
   lcd.begin(LCD_COLS, LCD_ROWS);
@@ -254,12 +262,14 @@ void handleCommand(byte command) {
     case CMD_STARTUP_SCREEN: //shown on the next power up
       saveStartupScreen();
       break;
-    case CMD_BACKLIGHT_ON: //at previously set brightness
-      serial_getch();   // time value - not used
-      //analogWrite(backLight, brightness);
+    case CMD_BACKLIGHT_ON: //at previously set brightness, for [minutes], 0 = stay on
+      value = serial_getch();
+      setBacklight(true);
+      backlightTimer = value > 0;
+      backlightOffAt = millis() + value * 60000UL;
       break;
     case CMD_BACKLIGHT_OFF:
-      //analogWrite(backLight, 0);
+      setBacklight(false);
       break;
     case CMD_GOTO:
       col = serial_getch();  //column, 1-based
@@ -308,6 +318,17 @@ void handleCommand(byte command) {
     case CMD_INIT_HBAR:
       hBar.Init();
       break;
+    case CMD_INIT_MEDIUM_DIGITS:
+      mediumNumbers.Init();
+      break;
+    case CMD_MEDIUM_DIGIT:
+      row = serial_getch();  //row, 1-based
+      col = serial_getch();  //column, 1-based
+      value = serial_getch();
+      if (row >= 1 && row < LCD_ROWS && col >= 1 && col <= LCD_COLS - 2) {  // digit is 2 rows x 3 columns
+        mediumNumbers.PrintDigit(value, col - 1, row - 1);
+      }
+      break;
     case CMD_INIT_LARGE_DIGITS:
       lcd.clearScreen();
       bigNumbers.Init();
@@ -326,12 +347,12 @@ void handleCommand(byte command) {
       break;
     case CMD_BRIGHTNESS_SAVE:
       brightness = serial_getch();
-      //analogWrite(backLight, brightness);
+      setBacklight(backlightOn);
       EEPROM.update(BRIGHTNESS, brightness);
       break;
     case CMD_BRIGHTNESS:
       brightness = serial_getch();
-      //analogWrite(backLight, brightness);
+      setBacklight(backlightOn);
       break;
     default:
       //all other commands ignored and their parameter bytes discarded
@@ -378,10 +399,26 @@ void handleChar(byte value) {
 // Helper function to read serial input as clean 8 bit byte
 byte serial_getch() {
   int ch;
-  while (Serial.available() == 0) {}
+  while (Serial.available() == 0) {
+    checkBacklightTimer();
+  }
   // read the incoming byte:
   ch = Serial.read();
   return (byte)(ch & 0xff);
+}
+
+// Backlight on D10 (PWM) at the current brightness
+void setBacklight(bool on) {
+  backlightOn = on;
+  backlightTimer = false;
+  analogWrite(backLight, on ? brightness : 0);
+}
+
+// Turn the backlight off when the time given to 0x42 runs out
+void checkBacklightTimer() {
+  if (backlightTimer && (long)(millis() - backlightOffAt) >= 0) {
+    setBacklight(false);
+  }
 }
 
 // Read and discard parameter bytes of a command we do not implement
