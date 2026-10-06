@@ -3,6 +3,20 @@ Matrix
 
 Matrix Orbital Emulated Arduino HD44780 Device for Arduino Nano V3.0
 
+Version 2.0 - Matrix Orbital LCD4041 emulation on a 40x4 HD44780 display
+(two controllers), for Arduino Nano V3.0 (ATmega328P) and Arduino Mini (ATmega168).
+
+What is new in 2.0:
+
+- fixed command handling (GPO, goto, bar graphs, character mapping) and
+  cursor handling across both controllers of the 40x4 display
+- startup screen stored in EEPROM (`0xFE 0x40`), defaults on a blank EEPROM
+- medium digits (`0xFE 0x6D` / `0xFE 0x6F`), 2 rows x 3 columns
+- backlight PWM on D10 with saved brightness and auto-off timer,
+  limited to 50% for USB power
+- glyph tables in flash (static RAM 678 -> 258 bytes)
+- PlatformIO project with a Docker build and avrdude upload script
+
 Breadboard
 
 ![Breadboard](http://s10.postimg.org/roe0sj1ll/tisplay_breadboard.png)

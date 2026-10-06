@@ -8,6 +8,9 @@
 #include "HBar.h"
 #include "VBar.h"
 
+// Firmware version, shown on the built-in startup screen
+#define FIRMWARE_VERSION "2.0"
+
 // Bit Rate - using 19200 but LCD Smartie defaults to 9600
 const long baud = 19200;
 
@@ -183,7 +186,7 @@ void showStartupScreen() {
     return;
   }
 
-  lcd.print(F(" Matrix Orbital Display - version 1.0 "));
+  lcd.print(F(" Matrix Orbital Display - version " FIRMWARE_VERSION));
   lcd.setCursor(8, 2);
   lcd.print(F("Input Ready"));
   lcd.setCursor(8, 3);
@@ -255,7 +258,7 @@ void handleCommand(byte command) {
       Serial.write(EEPROM.read(SERIAL_LO));
       break;
     case CMD_READ_VERSION:
-      Serial.write(0x11);        //'v1.1
+      Serial.write(0x11);        //'v1.1 - firmware version of the emulated module, not FIRMWARE_VERSION
       break;
     case CMD_READ_MODULE_TYPE:
       Serial.write(0x07);        //'lcd_type'='LCD4041'
