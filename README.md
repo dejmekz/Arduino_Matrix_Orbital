@@ -65,7 +65,8 @@ PWM from D10. A series resistor on the anode (A) limits the current.
   MOSFET source and the resistor with their own wires to a 5 V supply that
   can deliver at least 1 A; a USB-serial adapter cannot.
 
-Measured on the PM4040-1 rev B at 5.2 V (whole board, the logic draws 0.035 A):
+Measured on the PM4040-1 rev B at 5.2 V by PWM duty (whole board, the logic
+draws 0.035 A); with the default limit, brightness 255 gives the 128 column:
 
 | Brightness | 255     | 128     | 64      | 16      | 0       |
 |------------|---------|---------|---------|---------|---------|
@@ -77,6 +78,12 @@ Measured on the PM4040-1 rev B at 5.2 V (whole board, the logic draws 0.035 A):
 | `0xFE 0x46`        | backlight off                                    |
 | `0xFE 0x99 [level]`| set brightness 0-255                             |
 | `0xFE 0x98 [level]`| set and save brightness, restored at power up    |
+
+**Brightness limit**: so the board can run from a USB port (500 mA), the
+firmware scales the brightness 0-255 sent by the host to a PWM duty of at most
+50% (`MAX_BRIGHTNESS = 128` in `matrix.ino`). Brightness 255 then draws about
+0.29 A for the whole board. With a stronger 5 V supply, raise `MAX_BRIGHTNESS`
+up to 255.
 
 Startup screen: send `0xFE 0x40` followed by 160 characters (4 rows x 40) to
 store a screen that is shown on the next power up. 160 spaces restore the

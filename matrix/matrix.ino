@@ -26,6 +26,11 @@ const byte EEPROM_MAGIC_VALUE = 0xA5;
 const byte GPIO = 13;		// D13 - Built in LED on Nano V3.0
 const byte backLight = 10;	// D10 - Use PWM to change brightness
 
+// Highest PWM duty for the backlight. Brightness 0-255 from the host is scaled
+// to 0-MAX_BRIGHTNESS, so the board stays within the 500 mA of a USB port
+// (0.28 A at 128 with the 4.7 ohm backlight resistor, 0.56 A at 255).
+const byte MAX_BRIGHTNESS = 128;
+
 // Display size
 const byte LCD_COLS = 40;
 const byte LCD_ROWS = 4;
@@ -411,7 +416,7 @@ byte serial_getch() {
 void setBacklight(bool on) {
   backlightOn = on;
   backlightTimer = false;
-  analogWrite(backLight, on ? brightness : 0);
+  analogWrite(backLight, on ? (uint16_t)brightness * MAX_BRIGHTNESS / 255 : 0);
 }
 
 // Turn the backlight off when the time given to 0x42 runs out
