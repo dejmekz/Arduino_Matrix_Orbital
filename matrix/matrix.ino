@@ -12,14 +12,18 @@ const long baud = 19200;
 
 // EEPROM address values
 const byte BRIGHTNESS = 0;	// Brightness
-const byte CONTRAST = 1;	// Contrast
+                        	// 1 - was contrast, contrast is set by a trimmer
 const byte SERIAL_LO = 2;	// Serial number low byte
 const byte SERIAL_HI = 3;	// Serial number high byte
+const byte EEPROM_MAGIC = 4;	// EEPROM_MAGIC_VALUE once the defaults are written
+const byte STARTUP_SET = 5;	// 1 - custom startup screen stored, 0 - built-in one
+const int STARTUP_SCREEN = 16;	// custom startup screen, LCD_COLS * LCD_ROWS bytes
+
+const byte EEPROM_MAGIC_VALUE = 0xA5;
 
 // IO Pins
 const byte GPIO = 13;		// D13 - Built in LED on Nano V3.0
 const byte backLight = 10;	// D10 - Use PWM to change brightness
-const byte contrast = 3;    // D3  - Use PWM to change contrast  Connect 100uF between pin and GND
 
 // Display size
 const byte LCD_COLS = 40;
@@ -47,7 +51,6 @@ enum MatrixCommand : byte {
   CMD_CURSOR_LEFT       = 0x4C,
   CMD_CURSOR_RIGHT      = 0x4D,
   CMD_CUSTOM_CHAR       = 0x4E,  // slot, 8 bytes of bitmap
-  CMD_CONTRAST          = 0x50,  // level
   CMD_BLOCK_ON          = 0x53,
   CMD_BLOCK_OFF         = 0x54,
   CMD_GPO_OFF           = 0x56,  // gpo number
@@ -58,7 +61,6 @@ enum MatrixCommand : byte {
   CMD_INIT_VBAR_NARROW  = 0x73,
   CMD_INIT_VBAR_WIDE    = 0x76,
   CMD_HBAR              = 0x7C,  // column, row, direction, length
-  CMD_CONTRAST_SAVE     = 0x91,  // level
   CMD_BRIGHTNESS_SAVE   = 0x98,  // level
   CMD_BRIGHTNESS        = 0x99,  // level
 };
@@ -68,15 +70,17 @@ enum MatrixCommand : byte {
 // (wrap, scroll, key and flow-control switches, medium digit init, ...).
 const byte IGNORED_COMMANDS[][2] PROGMEM = {
   {0x3A, 2},  // enter flow-control mode: full, empty
+  {0x50, 1},  // set contrast - contrast is set by a trimmer
   {0x62, 3},  // draw bitmap: refid, x, y
   {0x63, 1},  // set drawing color
   {0x65, 2},  // continue line: x, y
   {0x6C, 4},  // draw line: x1, y1, x2, y2
-  {0x6F, 3},  // place medium digit: column, row, digit
+  {0x6F, 3},  // place medium digit: row, column, digit
   {0x70, 2},  // draw pixel: x, y
   {0x72, 5},  // draw rectangle: color, x1, y1, x2, y2
   {0x78, 5},  // draw solid rectangle: color, x1, y1, x2, y2
   {0x82, 3},  // set backlight colour: red, green, blue
+  {0x91, 1},  // set and save contrast - contrast is set by a trimmer
   {0xA0, 1},  // transmission protocol select: 0 - i2c, 1 - serial
   {0xD0, 3},  // set backlight colour: red, green, blue
   {0xD1, 2},  // set display size: columns, rows
@@ -104,7 +108,6 @@ const byte CHAR_MAP[128] PROGMEM = {
 };
 
 byte brightness;    // backlight level, restored from EEPROM
-byte contrastLevel; // contrast level, restored from EEPROM
 
 MatrixLcd lcd(7, 9, 8, 6,  3, 2, 5, 4);
 
@@ -119,24 +122,53 @@ void serial_skip(int count);
 byte clamp1(byte value, byte limit);
 void handleCommand(byte command);
 void handleChar(byte value);
+byte translateChar(byte value);
+void loadSettings();
+void showStartupScreen();
+void saveStartupScreen();
 
 // Setup
 void setup() {
   // Set the use ouf our output pins
   pinMode(GPIO, OUTPUT);
   //pinMode(backLight, OUTPUT);
-  //pinMode(contrast, OUTPUT);
 
-  // Gather default values from EEPROM (could add code here to handle default if EEPROM has never been written to)
   digitalWrite(GPIO, LOW);
-  brightness = EEPROM.read(BRIGHTNESS);
-  contrastLevel = EEPROM.read(CONTRAST);
+  loadSettings();
   //analogWrite(backLight, brightness);
-  //analogWrite(contrast, contrastLevel);
 
   // set up the LCD's number of columns and rows:
   lcd.begin(LCD_COLS, LCD_ROWS);
+  showStartupScreen();
+
+  Serial.begin(baud);
+}
+
+// Restore settings from EEPROM, writing defaults on a blank chip
+void loadSettings() {
+  if (EEPROM.read(EEPROM_MAGIC) != EEPROM_MAGIC_VALUE) {
+    EEPROM.update(BRIGHTNESS, 255);
+    EEPROM.update(SERIAL_LO, 0);
+    EEPROM.update(SERIAL_HI, 0);
+    EEPROM.update(STARTUP_SET, 0);
+    EEPROM.update(EEPROM_MAGIC, EEPROM_MAGIC_VALUE);
+  }
+
+  brightness = EEPROM.read(BRIGHTNESS);
+}
+
+void showStartupScreen() {
   lcd.clearScreen();
+
+  if (EEPROM.read(STARTUP_SET) == 1) {
+    for (byte row = 0; row < LCD_ROWS; row++) {
+      lcd.moveTo(0, row);
+      for (byte col = 0; col < LCD_COLS; col++) {
+        lcd.write(translateChar(EEPROM.read(STARTUP_SCREEN + row * LCD_COLS + col)));
+      }
+    }
+    return;
+  }
 
   lcd.print(F(" Matrix Orbital Display - version 1.0 "));
   lcd.setCursor(8, 2);
@@ -144,8 +176,30 @@ void setup() {
   lcd.setCursor(8, 3);
   lcd.print(baud);
   lcd.print(F(",8,N,1"));
+}
 
-  Serial.begin(baud);
+// Store the startup screen sent with 0x40, all spaces restore the built-in one.
+// The whole screen is received before writing, as EEPROM writes (3.3 ms per
+// byte) are slower than the serial input and would overflow its buffer.
+void saveStartupScreen() {
+  byte screen[LCD_COLS * LCD_ROWS];
+  bool blank = true;
+
+  for (int i = 0; i < LCD_COLS * LCD_ROWS; i++) {
+    screen[i] = serial_getch();
+    if (screen[i] != ' ')
+      blank = false;
+  }
+
+  if (blank) {
+    EEPROM.update(STARTUP_SET, 0);
+    return;
+  }
+
+  for (int i = 0; i < LCD_COLS * LCD_ROWS; i++) {
+    EEPROM.update(STARTUP_SCREEN + i, screen[i]);
+  }
+  EEPROM.update(STARTUP_SET, 1);
 }
 
 void loop() {
@@ -197,8 +251,8 @@ void handleCommand(byte command) {
       col = serial_getch();  //column, 1-based
       vBar.Draw(clamp1(col, LCD_COLS), serial_getch());
       break;
-    case CMD_STARTUP_SCREEN: //not supported yet
-      serial_skip(LCD_COLS * LCD_ROWS);
+    case CMD_STARTUP_SCREEN: //shown on the next power up
+      saveStartupScreen();
       break;
     case CMD_BACKLIGHT_ON: //at previously set brightness
       serial_getch();   // time value - not used
@@ -233,10 +287,6 @@ void handleCommand(byte command) {
         data[i] = serial_getch();
       }
       lcd.createChar(value, data);
-      break;
-    case CMD_CONTRAST: //not saved
-      contrastLevel = serial_getch();
-      //analogWrite(contrast, contrastLevel);
       break;
     case CMD_BLOCK_ON:
       lcd.setCursorMode(lcd.cursorMode() | LCD_BLINKON);
@@ -274,11 +324,6 @@ void handleCommand(byte command) {
       value = serial_getch();  // direction
       hBar.Draw(value, serial_getch());
       break;
-    case CMD_CONTRAST_SAVE:
-      contrastLevel = 255 - serial_getch(); // Contrast value
-      //analogWrite(contrast, contrastLevel);
-      EEPROM.update(CONTRAST, contrastLevel);
-      break;
     case CMD_BRIGHTNESS_SAVE:
       brightness = serial_getch();
       //analogWrite(backLight, brightness);
@@ -300,10 +345,15 @@ void handleCommand(byte command) {
   }
 }
 
-void handleChar(byte value) {
-  //change accented char to plain or to its LCD charmap equivalent
+//change accented char to plain or to its LCD charmap equivalent
+byte translateChar(byte value) {
   if (value >= 0x80)
-    value = pgm_read_byte(&CHAR_MAP[value - 0x80]);
+    return pgm_read_byte(&CHAR_MAP[value - 0x80]);
+  return value;
+}
+
+void handleChar(byte value) {
+  value = translateChar(value);
 
   switch (value)
   {
