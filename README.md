@@ -21,10 +21,60 @@ Hardware
 | D8          | LCD E1 (rows 1-2)                                          |
 | D6          | LCD E2 (rows 3-4)                                          |
 | D3, D2, D5, D4 | LCD D4, D5, D6, D7                                      |
-| D10         | Backlight, PWM - drive the LED backlight via a transistor  |
+| D10         | Backlight PWM, via MOSFET - see Backlight below            |
 | D13         | GPO 1 (on-board LED)                                       |
 
 Contrast is set with a trimmer on the LCD V0 pin; contrast commands are ignored.
+
+### Backlight
+
+The LED backlight is switched on its cathode (K) by an N-MOSFET driven with
+PWM from D10. A series resistor on the anode (A) limits the current.
+
+```
+              +5V
+               │
+            [R_BL]    series resistor, sized for ~0.5 A
+               │
+             LCD A
+             LCD K    LED backlight
+               │
+               │ D
+  D10 ─[220Ω]─┬┤ G    IRF3205 (G-D-S)
+              ││ S
+           [10kΩ]│
+              │  │
+  GND ────────┴──┴─── GND, own wire to the power supply
+```
+
+- **MOSFET**: IRF3205. It is not a logic-level part, but at a 5 V gate it
+  switches 0.5 A easily. A logic-level MOSFET (IRLZ44N, IRL3705N, AO3400)
+  works as well. Check that the drain-source voltage at full brightness is
+  below ~0.1 V.
+- **220 Ω** gate resistor limits the pin current when charging the gate;
+  **10 kΩ** pull-down keeps the backlight off during reset and bootloader.
+- **R_BL**: without it the backlight of the PM4040-1 rev B module draws about
+  2.2 A at 5.2 V. Size it so the backlight draws ~0.5 A at brightness 255:
+  `R_BL = (5.2 V - V_AK) / 0.5 A`, where `V_AK` is the voltage measured across
+  LCD A-K. Use a resistor rated at least twice `R_BL x 0.25 W`.
+- **Power**: the backlight current must not flow through thin wires or the
+  LCD GND pin. A voltage drop on VDD shifts the contrast (with 0.65 V of drop
+  all character cells turned dark when the backlight was dimmed). Run the
+  MOSFET source and the resistor with their own wires to a 5 V supply that
+  can deliver at least 1 A; a USB-serial adapter cannot.
+
+Measured on the PM4040-1 rev B at 5.2 V (whole board, the logic draws 0.035 A):
+
+| Brightness | 255     | 128     | 64      | 16      | 0       |
+|------------|---------|---------|---------|---------|---------|
+| Current    | 0.561 A | 0.293 A | 0.161 A | 0.061 A | 0.035 A |
+
+| Command            | Function                                         |
+|--------------------|--------------------------------------------------|
+| `0xFE 0x42 [min]`  | backlight on, off again after `min` minutes (0 = stay on) |
+| `0xFE 0x46`        | backlight off                                    |
+| `0xFE 0x99 [level]`| set brightness 0-255                             |
+| `0xFE 0x98 [level]`| set and save brightness, restored at power up    |
 
 Startup screen: send `0xFE 0x40` followed by 160 characters (4 rows x 40) to
 store a screen that is shown on the next power up. 160 spaces restore the
