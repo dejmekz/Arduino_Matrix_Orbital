@@ -3,8 +3,17 @@ Matrix
 
 Matrix Orbital Emulated Arduino HD44780 Device for Arduino Nano V3.0
 
-Version 2.0 - Matrix Orbital LCD4041 emulation on a 40x4 HD44780 display
+Version 2.1 - Matrix Orbital LCD4041 emulation on a 40x4 HD44780 display
 (two controllers), for Arduino Nano V3.0 (ATmega328P) and Arduino Mini (ATmega168).
+
+What is new in 2.1:
+
+- large digits (`0xFE 0x23`) take a 1-based column like the other commands
+  (were drawn one column to the right)
+- a horizontal bar near the right edge is cut at the display edge instead of
+  being moved left over other text
+- parameters of `0x33`, `0x39`, `0x55` and `0x7E` are discarded, not printed
+- brightness commands no longer cancel the backlight auto-off timer
 
 What is new in 2.0:
 
