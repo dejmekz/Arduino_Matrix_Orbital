@@ -1,7 +1,7 @@
 #include "BigNumbers.h"
 
-// Segment glyphs, loaded into CGRAM slots 1-7
-static const uint8_t bigNumberChars[7][8] PROGMEM = {
+// Segment glyphs, loaded into CGRAM slots 1-6
+static const uint8_t bigNumberChars[6][8] PROGMEM = {
   {
     B00000,
     B00000,
@@ -54,15 +54,6 @@ static const uint8_t bigNumberChars[7][8] PROGMEM = {
     B11111,
     B00000,
     B00000,
-    B00000,
-    B00000
-  }, {
-    B01110,
-    B01110,
-    B01110,
-    B01110,
-    B01100,
-    B01000,
     B00000,
     B00000
   }
@@ -142,19 +133,11 @@ void BigNumbers::Init()
 {
   uint8_t glyph[8];
 
-  for (byte i = 0; i < 7; i++)
+  for (byte i = 0; i < 6; i++)
   {
     memcpy_P(glyph, bigNumberChars[i], sizeof(glyph));
     _lcd->createChar(i + 1, glyph);
   }
-}
-
-void BigNumbers::PrintBigCharOnPosition(byte digit, byte position)
-{
-  if (digit > 9) return;
-  if (position > 9) return;
-
-  GenericDigitPrint(digit, position * 4);
 }
 
 void BigNumbers::PrintBigChar(byte digit, byte col)

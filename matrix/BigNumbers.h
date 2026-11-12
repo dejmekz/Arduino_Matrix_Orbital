@@ -9,7 +9,6 @@ class BigNumbers
   public:
     BigNumbers(LiquidCrystalFast &lcd);
     void Init();
-    void PrintBigCharOnPosition(byte digit, byte position);
     void PrintBigChar(byte digit, byte col);
   private:
     LiquidCrystalFast *_lcd;
