@@ -286,7 +286,7 @@ void LiquidCrystalFast::createChar(uint8_t location, uint8_t charmap[]) {
 
 void LiquidCrystalFast::setCursor(uint8_t col, uint8_t row)         // this can be called by the user but is also called before writing some characters.
 {
-	if ( row > _numlines ) {
+	if ( row >= _numlines ) {             // was '>', let row == _numlines index past row_offsets[]
 		row = _numlines-1;    // we count rows starting w/0
 	}
 	_y = row;
