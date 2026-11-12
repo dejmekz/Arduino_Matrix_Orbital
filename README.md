@@ -3,8 +3,17 @@ Matrix
 
 Matrix Orbital Emulated Arduino HD44780 Device for Arduino Nano V3.0
 
-Version 2.1 - Matrix Orbital LCD4041 emulation on a 40x4 HD44780 display
+Version 2.2 - Matrix Orbital LCD4041 emulation on a 40x4 HD44780 display
 (two controllers), for Arduino Nano V3.0 (ATmega328P) and Arduino Mini (ATmega168).
+
+What is new in 2.2:
+
+- character mapping follows one rule (ISO 8859-1 with three raw ROM codes,
+  see Characters below); fixes accented and symbol characters that showed
+  wrong glyphs or katakana
+- `0xFE 0x6E` (init large digits) no longer clears the screen, like a real
+  Matrix Orbital module
+- library: `setCursor` row check off by one
 
 What is new in 2.1:
 
@@ -25,14 +34,6 @@ What is new in 2.0:
   limited to 50% for USB power
 - glyph tables in flash (static RAM 678 -> 258 bytes)
 - PlatformIO project with a Docker build and avrdude upload script
-
-Breadboard
-
-![Breadboard](http://s10.postimg.org/roe0sj1ll/tisplay_breadboard.png)
-
-Circuit Diagram
-
-![Circuit Diagram](http://s23.postimg.org/ijjwnjtqz/tisplay_circuit.png)
 
 Hardware
 --------
@@ -110,7 +111,25 @@ up to 255.
 
 Startup screen: send `0xFE 0x40` followed by 160 characters (4 rows x 40) to
 store a screen that is shown on the next power up. 160 spaces restore the
-built-in screen.
+built-in screen. Writing the EEPROM takes up to 0.5 s and the serial input is
+not read meanwhile, so wait about 1 s before sending anything else.
+
+Characters
+----------
+
+Bytes 0x20 - 0x7F and custom characters 0 - 7 go to the display unchanged.
+Bytes 0xA0 - 0xFF are read as ISO 8859-1 and shown as the HD44780 A00 ROM
+glyph where the ROM has one (`£ ¢ ° µ · ä ö ü ñ ÷`), otherwise as the closest
+ASCII character (`é` -> `e`, `×` -> `x`, `½` -> `/`). Three codes are passed
+through as raw ROM glyphs because hosts use them that way:
+
+| Byte   | Shown as     | ISO 8859-1 (not shown) | Used by                     |
+|--------|--------------|------------------------|-----------------------------|
+| `0xA5` | middle dot   | `¥`                    | raspi-lcd-dashboard clock   |
+| `0xDF` | degree sign  | `ß`                    | LCD Smartie `$Chr(223)`     |
+| `0xFF` | full block   | `ÿ`                    | bar graphs                  |
+
+Bytes 0x80 - 0x9F have no ISO 8859-1 characters and are passed through.
 
 Building
 --------

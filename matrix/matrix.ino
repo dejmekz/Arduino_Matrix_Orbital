@@ -9,7 +9,7 @@
 #include "VBar.h"
 
 // Firmware version, shown on the built-in startup screen
-#define FIRMWARE_VERSION "2.1"
+#define FIRMWARE_VERSION "2.2"
 
 // Bit Rate - using 19200 but LCD Smartie defaults to 9600
 const long baud = 19200;
