@@ -18,8 +18,6 @@ class HBar
     byte _width;
 
     void WriteChars(byte chr, byte len);
-    void DrawToRight(byte pos, byte rest, byte space);
-    void DrawToLeft(byte pos, byte rest, byte space);
 };
 
 #endif

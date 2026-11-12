@@ -21,109 +21,65 @@ void HBar::Init()
   }
 }
 
+// Col and Row are 1-based. Left to right the bar starts at Col, right to left
+// it ends at Col. The bar field is _width chars, cut at the display edge.
 void HBar::Draw(byte dir, byte len)
 {
-  //Bargraph max size is _width chars
-  //len range is 0 to _width * 5 pixels
-  byte maxLen = _width * 5;
+  byte cols = _lcd->numcols;
+  byte c = (Col > 0) ? Col - 1 : 0;
+  byte r = (Row > 0) ? Row - 1 : 0;
+  byte width;
 
-  if (len > maxLen)
-    len = maxLen;
+  if (c >= cols)
+    c = cols - 1;
 
-  byte hsize = len / 5;     //length of full block
-  byte hrest = len % 5;     //rest - part of block - zero is space char - 1 char
-  byte hfree = _width - hsize;
+  if (r >= _lcd->numlines)
+    r = _lcd->numlines - 1;
 
-  if ((hrest > 0) && (hfree > 0))
-  {
-    hfree--;
-  }
-
-  //left to right =>
   if (dir == 0)
   {
-    DrawToRight(hsize, hrest, hfree);
+    width = min(_width, (byte)(cols - c));
   }
-
-  //right to left <=
-  if (dir == 1)
+  else if (dir == 1)
   {
-    DrawToLeft(hsize, hrest, hfree);
+    width = min(_width, (byte)(c + 1));
+    c = c + 1 - width;
   }
-}
-
-
-void HBar::DrawToRight(byte pos, byte rest, byte space)
-{
-
-  uint8_t c = 0;
-  uint8_t r = 0;
-
-  if (Row > 0)
-    r = Row - 1;
-
-  if (r > 3)
-    r = 3;
-
-  if (Col > 0)
+  else
   {
-    c = Col - 1;
+    return;
   }
 
-  if (c > _lcd->numcols - _width)
-  {
-    c = _lcd->numcols - _width;
-  }
+  //len range is 0 to width * 5 pixels
+  if (len > width * 5)
+    len = width * 5;
+
+  byte full = len / 5;      //full blocks
+  byte rest = len % 5;      //pixels of the partial block
+  byte space = width - full - (rest > 0 ? 1 : 0);
 
   _lcd->setCursor(c, r);
 
-  WriteChars(255, pos);
-
-  if (rest > 0)
+  if (dir == 0)
   {
-    _lcd->write(rest - 1);
+    //left to right =>
+    WriteChars(255, full);
+    if (rest > 0)
+      _lcd->write(rest - 1);
+    WriteChars(32, space);
   }
-
-  WriteChars(32, space);
-}
-
-
-void HBar::DrawToLeft(byte pos, byte rest, byte space)
-{
-  uint8_t c = 0;
-  uint8_t r = 0;
-
-  if (Col > _width)
-    c = Col - _width;
-
-  if (Row > 0)
-    r = Row - 1;
-
-  if (r > 3)
-    r = 3;
-
-  if (c > _lcd->numcols - _width)
+  else
   {
-    c = _lcd->numcols - _width;
+    //right to left <=
+    WriteChars(32, space);
+    if (rest > 0)
+      _lcd->write(rest + 3);
+    WriteChars(255, full);
   }
-
-  _lcd->setCursor(c, r);
-
-  WriteChars(32, space);
-
-  if (rest > 0)
-  {
-    _lcd->write(rest + 3);
-  }
-
-  WriteChars(255, pos);
 }
 
 void HBar::WriteChars(byte chr, byte len)
 {
-  if (len == 0)
-    return;
-
   for (byte i = 0; i < len; i++)
   {
     _lcd->write(chr);
