@@ -78,10 +78,13 @@ enum MatrixCommand : byte {
 
 // Commands that are accepted but ignored, with the number of parameter bytes
 // to discard. Commands not listed here and not implemented have no parameters
-// (wrap, scroll, key and flow-control switches, medium digit init, ...).
+// (wrap, scroll, key and flow-control switches, ...).
 const byte IGNORED_COMMANDS[][2] PROGMEM = {
+  {0x33, 1},  // change I2C slave address
+  {0x39, 1},  // change baud rate - fixed at compile time
   {0x3A, 2},  // enter flow-control mode: full, empty
   {0x50, 1},  // set contrast - contrast is set by a trimmer
+  {0x55, 1},  // set keypad debounce time - no keypad
   {0x62, 3},  // draw bitmap: refid, x, y
   {0x63, 1},  // set drawing color
   {0x65, 2},  // continue line: x, y
@@ -89,6 +92,7 @@ const byte IGNORED_COMMANDS[][2] PROGMEM = {
   {0x70, 2},  // draw pixel: x, y
   {0x72, 5},  // draw rectangle: color, x1, y1, x2, y2
   {0x78, 5},  // draw solid rectangle: color, x1, y1, x2, y2
+  {0x7E, 1},  // set keypad auto-repeat mode - no keypad
   {0x82, 3},  // set backlight colour: red, green, blue
   {0x91, 1},  // set and save contrast - contrast is set by a trimmer
   {0xA0, 1},  // transmission protocol select: 0 - i2c, 1 - serial
@@ -139,6 +143,7 @@ void handleChar(byte value);
 byte translateChar(byte value);
 void loadSettings();
 void setBacklight(bool on);
+void applyBrightness();
 void checkBacklightTimer();
 void showStartupScreen();
 void saveStartupScreen();
@@ -239,11 +244,10 @@ void handleCommand(byte command) {
   switch (command)
   {
     case CMD_LARGE_DIGIT:
-      col = serial_getch();
+      col = serial_getch();  //column, 1-based
       value = serial_getch();
-      //bigNumbers.PrintBigCharOnPosition(value, col);
-      if (col <= LCD_COLS - 3) {  // digit is 3 columns wide
-        bigNumbers.PrintBigChar(value, col);
+      if (col >= 1 && col <= LCD_COLS - 2) {  // digit is 3 columns wide
+        bigNumbers.PrintBigChar(value, col - 1);
       }
       break;
     case CMD_POLL_KEYPAD:  //send back key pressed
@@ -355,12 +359,12 @@ void handleCommand(byte command) {
       break;
     case CMD_BRIGHTNESS_SAVE:
       brightness = serial_getch();
-      setBacklight(backlightOn);
+      applyBrightness();
       EEPROM.update(BRIGHTNESS, brightness);
       break;
     case CMD_BRIGHTNESS:
       brightness = serial_getch();
-      setBacklight(backlightOn);
+      applyBrightness();
       break;
     default:
       //all other commands ignored and their parameter bytes discarded
@@ -415,11 +419,16 @@ byte serial_getch() {
   return (byte)(ch & 0xff);
 }
 
-// Backlight on D10 (PWM) at the current brightness
+// Backlight on D10 (PWM) at the current brightness, cancels the off timer
 void setBacklight(bool on) {
   backlightOn = on;
   backlightTimer = false;
-  analogWrite(backLight, on ? (uint16_t)brightness * MAX_BRIGHTNESS / 255 : 0);
+  applyBrightness();
+}
+
+// Update the PWM after a brightness change, keeps the on/off state and timer
+void applyBrightness() {
+  analogWrite(backLight, backlightOn ? (uint16_t)brightness * MAX_BRIGHTNESS / 255 : 0);
 }
 
 // Turn the backlight off when the time given to 0x42 runs out
